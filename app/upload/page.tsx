@@ -5,8 +5,12 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FileSelector } from '@/components/FileSelector';
 import { BlackboardForm } from '@/components/BlackboardForm';
+import { BlackboardPreview } from '@/components/BlackboardPreview';
+import { ModeSelector } from '@/components/ModeSelector';
+import { IndividualMode } from '@/components/IndividualMode';
+import { PreviewModal } from '@/components/PreviewModal';
 import { UploadProgressToast, UploadProgressModal } from '@/components/UploadProgress';
-import { processImages } from '@/lib/canvas';
+import { processImages, processImage } from '@/lib/canvas';
 import { uploadPhotosInChunks } from '@/lib/dandori-api';
 import { saveManifest } from '@/lib/supabase';
 import type { BlackboardInfo, UploadProgress, Manifest } from '@/types';
@@ -25,12 +29,29 @@ export default function UploadPage() {
     failed: 0
   });
   const [showModal, setShowModal] = useState(false);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [previewBlackboardInfo, setPreviewBlackboardInfo] = useState<BlackboardInfo>({
+    projectName: '現場名取得中...',
+    workType: '基礎工事',
+    weather: '晴れ',
+    workContent: '',
+    timestamp: new Date()
+  });
+  const [mode, setMode] = useState<'selection' | 'batch' | 'individual'>('selection');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   useEffect(() => {
     if (placeCode && siteCode) {
       fetchSiteInfo();
     }
   }, [placeCode, siteCode]);
+
+  useEffect(() => {
+    setPreviewBlackboardInfo(prev => ({
+      ...prev,
+      projectName: projectName
+    }));
+  }, [projectName]);
 
   async function fetchSiteInfo() {
     try {
@@ -48,6 +69,93 @@ export default function UploadPage() {
 
   const handleFilesSelected = (selectedFiles: File[]) => {
     setFiles(selectedFiles);
+    if (selectedFiles.length > 0) {
+      setPreviewFile(selectedFiles[0]);
+    }
+  };
+
+  const handleIndividualSubmit = async (assignments: Map<number, BlackboardInfo>) => {
+    setIsProcessing(true);
+    setShowModal(true);
+    setProgress({ total: assignments.size, completed: 0, failed: 0 });
+
+    try {
+      const jobId = `${new Date().toISOString().slice(0, 10)}-${crypto.randomUUID().slice(0, 8)}`;
+      const processedList = [];
+
+      // 設定済みの写真のみ処理
+      for (const [index, info] of assignments.entries()) {
+        const file = files[index];
+        const processed = await processImage(file, info, jobId);
+        processedList.push(processed);
+        setProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
+      }
+
+      // アップロード処理（一括設定と同じ）
+      const uploadFiles = processedList.map(p => ({
+        filename: p.filename,
+        blob: p.processedBlob
+      }));
+
+      await uploadPhotosInChunks(
+        placeCode,
+        siteCode,
+        '施工中',
+        '100033',
+        uploadFiles,
+        (completed, total) => {
+          setProgress(prev => ({ ...prev, completed }));
+        }
+      );
+
+      // manifest保存
+      const manifest: Manifest = {
+        jobId,
+        placeCode,
+        siteCode,
+        categoryName: '施工中',
+        templateVersion: 'v1.0',
+        createdAtClient: new Date().toISOString(),
+        hashAlgorithm: 'SHA-256',
+        blackboardInfo: processedList[0] ? Array.from(assignments.values())[0] : {} as BlackboardInfo,
+        files: processedList.map((p, i) => ({
+          localId: crypto.randomUUID(),
+          originalFilename: p.originalFile.name,
+          uploadedFilename: p.filename,
+          originalHash: p.originalHash,
+          processedHash: p.processedHash,
+          width: p.width,
+          height: p.height,
+          status: 'uploaded',
+          attempts: 1,
+          completedAt: new Date().toISOString()
+        }))
+      };
+
+      await saveManifest(manifest);
+
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'BLACKBOARD_COMPLETE',
+          count: assignments.size,
+          jobId
+        }, '*');
+      }
+
+      setTimeout(() => {
+        setShowModal(false);
+        if (window.opener) {
+          window.close();
+        }
+      }, 3000);
+
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('アップロードに失敗しました');
+      setProgress(prev => ({ ...prev, failed: prev.total - prev.completed }));
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleSubmit = async (blackboardInfo: BlackboardInfo) => {
@@ -166,14 +274,57 @@ export default function UploadPage() {
 
           {files.length > 0 && !isProcessing && (
             <div className="pt-4 border-t">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                黒板情報を入力
-              </h2>
-              <BlackboardForm
-                projectName={projectName}
-                onSubmit={handleSubmit}
-                disabled={isProcessing}
-              />
+              {mode === 'selection' && (
+                <ModeSelector
+                  onSelectMode={(selectedMode) => setMode(selectedMode)}
+                  fileCount={files.length}
+                />
+              )}
+
+              {mode === 'batch' && (
+                <div className="space-y-4">
+                  {/* 左2:右1の比率に変更 */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* 左側: プレビュー（2カラム分） */}
+                    <div className="lg:col-span-2">
+                      <BlackboardPreview
+                        imageFile={previewFile}
+                        blackboardInfo={previewBlackboardInfo}
+                        onPreviewClick={() => setShowPreviewModal(true)}
+                      />
+                    </div>
+
+                    {/* 右側: 黒板情報入力（1カラム分） */}
+                    <div className="lg:col-span-1">
+                      <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                        黒板情報を入力（全{files.length}枚に適用）
+                      </h2>
+                      <BlackboardForm
+                        projectName={projectName}
+                        onSubmit={handleSubmit}
+                        onFormChange={(info) => setPreviewBlackboardInfo(info)}
+                        disabled={isProcessing}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setMode('selection')}
+                    className="text-gray-600 hover:text-gray-800 underline"
+                  >
+                    ← モード選択に戻る
+                  </button>
+                </div>
+              )}
+
+              {mode === 'individual' && (
+                <IndividualMode
+                  files={files}
+                  projectName={projectName}
+                  onSubmit={handleIndividualSubmit}
+                  onBack={() => setMode('selection')}
+                />
+              )}
             </div>
           )}
         </div>
@@ -181,6 +332,13 @@ export default function UploadPage() {
 
       <UploadProgressToast progress={progress} />
       {showModal && <UploadProgressModal progress={progress} />}
+      {showPreviewModal && previewFile && (
+        <PreviewModal
+          imageFile={previewFile}
+          blackboardInfo={previewBlackboardInfo}
+          onClose={() => setShowPreviewModal(false)}
+        />
+      )}
     </div>
   );
 }

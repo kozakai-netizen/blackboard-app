@@ -7,7 +7,9 @@ import type { BlackboardInfo } from '@/types';
 interface BlackboardFormProps {
   projectName: string;
   onSubmit: (info: BlackboardInfo) => void;
+  onFormChange?: (info: BlackboardInfo) => void;
   disabled?: boolean;
+  hideSubmitButton?: boolean;
 }
 
 const WORK_TYPES = [
@@ -25,7 +27,7 @@ const WORK_TYPES = [
 
 const WEATHER_OPTIONS = ['晴れ', '曇り', '雨', '雪'];
 
-export function BlackboardForm({ projectName, onSubmit, disabled = false }: BlackboardFormProps) {
+export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled = false, hideSubmitButton = false }: BlackboardFormProps) {
   const [workType, setWorkType] = useState(WORK_TYPES[0]);
   const [weather, setWeather] = useState(WEATHER_OPTIONS[0]);
   const [workContent, setWorkContent] = useState('');
@@ -61,7 +63,17 @@ export function BlackboardForm({ projectName, onSubmit, disabled = false }: Blac
         </label>
         <select
           value={workType}
-          onChange={e => setWorkType(e.target.value)}
+          onChange={e => {
+            const newWorkType = e.target.value;
+            setWorkType(newWorkType);
+            onFormChange?.({
+              projectName,
+              workType: newWorkType,
+              weather,
+              workContent: workContent.trim() || undefined,
+              timestamp: new Date()
+            });
+          }}
           disabled={disabled}
           className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
                      disabled:bg-gray-100 text-base"
@@ -79,7 +91,17 @@ export function BlackboardForm({ projectName, onSubmit, disabled = false }: Blac
         </label>
         <select
           value={weather}
-          onChange={e => setWeather(e.target.value)}
+          onChange={e => {
+            const newWeather = e.target.value;
+            setWeather(newWeather);
+            onFormChange?.({
+              projectName,
+              workType,
+              weather: newWeather,
+              workContent: workContent.trim() || undefined,
+              timestamp: new Date()
+            });
+          }}
           disabled={disabled}
           className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
                      disabled:bg-gray-100 text-base"
@@ -97,7 +119,17 @@ export function BlackboardForm({ projectName, onSubmit, disabled = false }: Blac
         </label>
         <textarea
           value={workContent}
-          onChange={e => setWorkContent(e.target.value)}
+          onChange={e => {
+            const newWorkContent = e.target.value;
+            setWorkContent(newWorkContent);
+            onFormChange?.({
+              projectName,
+              workType,
+              weather,
+              workContent: newWorkContent.trim() || undefined,
+              timestamp: new Date()
+            });
+          }}
           disabled={disabled}
           placeholder="配筋検査、型枠組立など"
           className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
@@ -106,15 +138,17 @@ export function BlackboardForm({ projectName, onSubmit, disabled = false }: Blac
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={disabled}
-        className="w-full py-4 px-6 bg-green-600 text-white rounded-lg
-                   hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed
-                   font-bold text-lg transition-colors"
-      >
-        登録する
-      </button>
+      {!hideSubmitButton && (
+        <button
+          type="submit"
+          disabled={disabled}
+          className="w-full py-4 px-6 bg-green-600 text-white rounded-lg
+                     hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed
+                     font-bold text-lg transition-colors"
+        >
+          登録する
+        </button>
+      )}
     </form>
   );
 }
