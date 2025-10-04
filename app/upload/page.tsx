@@ -18,10 +18,108 @@ import type { BlackboardInfo, UploadProgress, Manifest } from '@/types';
 export default function UploadPage() {
   const searchParams = useSearchParams();
   const siteCode = searchParams.get('site_code') || '';
-  const placeCode = searchParams.get('place_code') || process.env.NEXT_PUBLIC_PLACE_CODE || '';
+  const placeCode = searchParams.get('place_code') || '';
+
+  // モックデータ（app/sites/page.tsx と同じデータ）
+  const mockSites = [
+    {
+      site_code: "SITE001",
+      site_name: "〇〇マンション新築工事",
+      site_type: "建築工事",
+      address: "東京都渋谷区〇〇1-2-3",
+      updated_at: "2025-10-03T10:30:00Z",
+      status: "進行中",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE002",
+      site_name: "△△ビル改修工事",
+      site_type: "土木工事",
+      address: "大阪府大阪市〇〇区1-2-3",
+      updated_at: "2025-10-02T14:20:00Z",
+      status: "進行中",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE003",
+      site_name: "××橋梁補修工事",
+      site_type: "土木工事",
+      address: "神奈川県横浜市〇〇区5-6-7",
+      updated_at: "2025-10-01T09:15:00Z",
+      status: "完了",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE004",
+      site_name: "□□駅前再開発工事",
+      site_type: "建築工事",
+      address: "東京都新宿区〇〇2-3-4",
+      updated_at: "2025-09-30T16:45:00Z",
+      status: "進行中",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE005",
+      site_name: "◇◇公園整備工事",
+      site_type: "造園工事",
+      address: "千葉県千葉市〇〇区8-9-10",
+      updated_at: "2025-09-28T11:00:00Z",
+      status: "進行中",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE006",
+      site_name: "☆☆トンネル工事",
+      site_type: "土木工事",
+      address: "静岡県静岡市〇〇区11-12-13",
+      updated_at: "2025-09-25T08:30:00Z",
+      status: "進行中",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE007",
+      site_name: "●●ショッピングモール新築工事",
+      site_type: "建築工事",
+      address: "愛知県名古屋市〇〇区14-15-16",
+      updated_at: "2025-09-20T13:20:00Z",
+      status: "完了",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE008",
+      site_name: "▲▲上下水道工事",
+      site_type: "設備工事",
+      address: "福岡県福岡市〇〇区17-18-19",
+      updated_at: "2025-09-15T10:10:00Z",
+      status: "進行中",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE009",
+      site_name: "■■学校校舎改修工事",
+      site_type: "建築工事",
+      address: "北海道札幌市〇〇区20-21-22",
+      updated_at: "2025-09-10T15:40:00Z",
+      status: "進行中",
+      place_code: "TEST_PLACE_001"
+    },
+    {
+      site_code: "SITE010",
+      site_name: "◆◆浄水場設備更新工事",
+      site_type: "設備工事",
+      address: "宮城県仙台市〇〇区23-24-25",
+      updated_at: "2025-09-05T09:00:00Z",
+      status: "完了",
+      place_code: "TEST_PLACE_001"
+    }
+  ];
+
+  // モックデータから現場情報を取得
+  const siteInfo = mockSites.find(s => s.site_code === siteCode);
+  const initialProjectName = siteInfo?.site_name || '現場名不明';
 
   const [files, setFiles] = useState<File[]>([]);
-  const [projectName, setProjectName] = useState('現場名取得中...');
+  const [projectName, setProjectName] = useState(initialProjectName);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<UploadProgress>({
     total: 0,
@@ -31,7 +129,7 @@ export default function UploadPage() {
   const [showModal, setShowModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewBlackboardInfo, setPreviewBlackboardInfo] = useState<BlackboardInfo>({
-    projectName: '現場名取得中...',
+    projectName: initialProjectName,
     workType: '基礎工事',
     weather: '晴れ',
     workContent: '',
@@ -41,9 +139,8 @@ export default function UploadPage() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   useEffect(() => {
-    if (placeCode && siteCode) {
-      fetchSiteInfo();
-    }
+    // fetchSiteInfo(); // 本番環境ではコメント解除
+    // モック環境では fetchSiteInfo を使用せず、mockSites から直接取得
   }, [placeCode, siteCode]);
 
   useEffect(() => {
@@ -250,7 +347,7 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-[1600px] mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
           <h1 className="text-2xl font-bold text-gray-800 border-b pb-3">
             電子小黒板 - 一括登録

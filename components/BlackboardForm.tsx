@@ -31,6 +31,17 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
   const [workType, setWorkType] = useState(WORK_TYPES[0]);
   const [weather, setWeather] = useState(WEATHER_OPTIONS[0]);
   const [workContent, setWorkContent] = useState('');
+  const [timestamp, setTimestamp] = useState(new Date());
+
+  // datetime-local形式の文字列に変換（YYYY-MM-DDThh:mm）
+  const formatDateTimeLocal = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +51,7 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
       workType,
       weather,
       workContent: workContent.trim() || undefined,
-      timestamp: new Date()
+      timestamp
     };
 
     onSubmit(info);
@@ -59,6 +70,31 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
+          撮影日時 <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="datetime-local"
+          value={formatDateTimeLocal(timestamp)}
+          onChange={e => {
+            const newTimestamp = new Date(e.target.value);
+            setTimestamp(newTimestamp);
+            onFormChange?.({
+              projectName,
+              workType,
+              weather,
+              workContent: workContent.trim() || undefined,
+              timestamp: newTimestamp
+            });
+          }}
+          disabled={disabled}
+          className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
+                     disabled:bg-gray-100 text-base"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           工種 <span className="text-red-500">*</span>
         </label>
         <select
@@ -71,7 +107,7 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
               workType: newWorkType,
               weather,
               workContent: workContent.trim() || undefined,
-              timestamp: new Date()
+              timestamp
             });
           }}
           disabled={disabled}
@@ -99,7 +135,7 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
               workType,
               weather: newWeather,
               workContent: workContent.trim() || undefined,
-              timestamp: new Date()
+              timestamp
             });
           }}
           disabled={disabled}
@@ -127,7 +163,7 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
               workType,
               weather,
               workContent: newWorkContent.trim() || undefined,
-              timestamp: new Date()
+              timestamp
             });
           }}
           disabled={disabled}

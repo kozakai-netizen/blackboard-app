@@ -1,16 +1,9 @@
 // app/page.tsx
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function HomePage() {
-  const router = useRouter();
-
-  const handleStart = () => {
-    const placeCode = process.env.NEXT_PUBLIC_PLACE_CODE || 'test';
-    const siteCode = 'test-site';
-    router.push(`/upload?place_code=${placeCode}&site_code=${siteCode}`);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center p-4">
@@ -55,20 +48,20 @@ export default function HomePage() {
               <div>
                 <h3 className="font-semibold text-gray-800">簡単操作</h3>
                 <p className="text-sm text-gray-600">
-                  写真を選んで、工種・天候を選ぶだけ
+                  まず現場を選択してから、写真をアップロードします
                 </p>
               </div>
             </div>
           </div>
 
-          <button
-            onClick={handleStart}
-            className="w-full py-4 px-8 bg-blue-600 text-white rounded-lg
+          <Link
+            href="/sites"
+            className="block w-full py-4 px-8 bg-blue-600 text-white rounded-lg
                        hover:bg-blue-700 font-bold text-xl transition-colors
                        shadow-lg hover:shadow-xl"
           >
             はじめる →
-          </button>
+          </Link>
         </div>
 
         <div className="text-sm text-gray-500">

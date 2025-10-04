@@ -25,11 +25,29 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
     timestamp: new Date()
   });
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewPhotoIndex, setPreviewPhotoIndex] = useState<number | null>(null);
 
   // 選択中の1枚目のファイル
   const previewFile = selectedIndices.size > 0
     ? files[Array.from(selectedIndices)[0]]
     : null;
+
+  // プレビューモーダル用の黒板情報
+  const previewModalBlackboardInfo = previewPhotoIndex !== null
+    ? (assignments.get(previewPhotoIndex) || currentBlackboardInfo)
+    : currentBlackboardInfo;
+
+  // プレビューモーダル用のファイル
+  const previewModalFile = previewPhotoIndex !== null
+    ? files[previewPhotoIndex]
+    : previewFile;
+
+  // 選択順の配列を生成（選択された順番を保持）
+  const getSelectionOrder = (index: number): number | null => {
+    if (!selectedIndices.has(index)) return null;
+    const selectedArray = Array.from(selectedIndices);
+    return selectedArray.indexOf(index) + 1;
+  };
 
   const handleToggle = (index: number) => {
     const newSelected = new Set(selectedIndices);
@@ -37,8 +55,31 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
       newSelected.delete(index);
     } else {
       newSelected.add(index);
+
+      // 設定済み写真を選択した場合、その設定をフォームに反映
+      if (assignments.has(index)) {
+        const existingInfo = assignments.get(index);
+        if (existingInfo) {
+          setCurrentBlackboardInfo({
+            ...existingInfo,
+            timestamp: new Date() // 新しいタイムスタンプに更新
+          });
+        }
+      }
     }
     setSelectedIndices(newSelected);
+  };
+
+  const handleCheckboxToggle = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation(); // 他のクリックイベントを防止
+    handleToggle(index);
+  };
+
+  const handlePreviewClick = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation(); // 他のクリックイベントを防止
+    // クリックした写真のindexを保存
+    setPreviewPhotoIndex(index);
+    setShowPreviewModal(true);
   };
 
   const handleToggleAll = () => {
@@ -50,13 +91,22 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
   };
 
   const handleApply = () => {
+    if (selectedIndices.size === 0) return;
+
     const newAssignments = new Map(assignments);
+    const count = selectedIndices.size;
+
+    // 選択中の写真に黒板情報を適用
     selectedIndices.forEach(index => {
-      newAssignments.set(index, { ...currentBlackboardInfo });
+      newAssignments.set(index, {
+        ...currentBlackboardInfo,
+        timestamp: new Date() // 適用時のタイムスタンプ
+      });
     });
+
     setAssignments(newAssignments);
-    setSelectedIndices(new Set());
-    alert(`${selectedIndices.size}枚に黒板情報を設定しました`);
+    setSelectedIndices(new Set()); // 選択を解除
+    alert(`${count}枚に黒板情報を設定しました`);
   };
 
   const handleSubmitAll = () => {
@@ -88,33 +138,74 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
             選択中: {selectedIndices.size}枚 / 設定済み: {assignments.size}枚
           </p>
           <div className="grid grid-cols-2 gap-2 max-h-[600px] overflow-y-auto">
-            {files.map((file, index) => (
-              <div
-                key={index}
-                onClick={() => handleToggle(index)}
-                className={`relative border-2 rounded cursor-pointer transition-all ${
-                  selectedIndices.has(index)
-                    ? 'border-blue-500 bg-blue-50'
-                    : assignments.has(index)
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-gray-200 hover:border-gray-400'
-                }`}
-              >
-                <img
-                  src={URL.createObjectURL(file)}
-                  alt={`${index + 1}`}
-                  className="w-full h-24 object-cover rounded"
-                />
-                <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-2 py-1 rounded">
-                  {index + 1}
-                </div>
-                {assignments.has(index) && (
-                  <div className="absolute top-1 right-1 bg-green-500 text-white text-xs px-2 py-1 rounded">
-                    ✓
+            {files.map((file, index) => {
+              const selectionOrder = getSelectionOrder(index);
+              const isSelected = selectedIndices.has(index);
+              const isAssigned = assignments.has(index);
+
+              return (
+                <div
+                  key={index}
+                  className={`relative border-2 rounded transition-all ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50'
+                      : isAssigned
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  {/* チェックボックス（左上・クリック領域拡大） */}
+                  <div
+                    onClick={(e) => handleCheckboxToggle(e, index)}
+                    className="absolute top-0 left-0 z-10 cursor-pointer p-2"
+                  >
+                    <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
+                      isSelected
+                        ? 'bg-blue-600 border-blue-600'
+                        : 'bg-white border-gray-400 hover:border-blue-500'
+                    }`}>
+                      {isSelected && (
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* 写真 */}
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt={`写真 ${index + 1}`}
+                    className="w-full h-24 object-cover rounded"
+                  />
+
+                  {/* 選択順番号（チェックボックスの右横） */}
+                  {isSelected && selectionOrder !== null && (
+                    <div className="absolute top-1 left-10 bg-blue-600 text-white text-xs px-2 py-1 rounded font-bold">
+                      {selectionOrder}
+                    </div>
+                  )}
+
+                  {/* 設定済みチェックマーク（右上） */}
+                  {isAssigned && (
+                    <div className="absolute top-1 right-1 bg-green-500 text-white text-xs px-2 py-1 rounded">
+                      ✓ 設定済
+                    </div>
+                  )}
+
+                  {/* プレビューボタン（右下） */}
+                  <button
+                    onClick={(e) => handlePreviewClick(e, index)}
+                    className="absolute bottom-1 right-1 z-10 bg-black/60 hover:bg-black/80 text-white p-1.5 rounded-full transition-colors"
+                    title="プレビュー表示"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -177,11 +268,14 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
       </div>
 
       {/* プレビューモーダル */}
-      {showPreviewModal && previewFile && (
+      {showPreviewModal && previewModalFile && (
         <PreviewModal
-          imageFile={previewFile}
-          blackboardInfo={currentBlackboardInfo}
-          onClose={() => setShowPreviewModal(false)}
+          imageFile={previewModalFile}
+          blackboardInfo={previewModalBlackboardInfo}
+          onClose={() => {
+            setShowPreviewModal(false);
+            setPreviewPhotoIndex(null);
+          }}
         />
       )}
     </div>
