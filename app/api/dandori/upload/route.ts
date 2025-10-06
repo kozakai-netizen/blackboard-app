@@ -22,7 +22,12 @@ export async function POST(request: NextRequest) {
       dwFormData.append('data[files][]', file);
     });
 
-    const url = `${DW_API_BASE}/places/${placeCode}/sites/${siteCode}/site_photos`;
+    const url = `${DW_API_BASE}/co/places/${placeCode}/sites/${siteCode}/site_photos`;
+
+    console.log('📸 Upload API called');
+    console.log('📸 Request:', { placeCode, siteCode, categoryName, updateCrew, fileCount: files.length });
+    console.log('📸 URL:', url);
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -31,18 +36,24 @@ export async function POST(request: NextRequest) {
       body: dwFormData
     });
 
-    const data = await response.json();
+    console.log('📸 Response status:', response.status);
+
+    // まずテキストで取得してからJSONをパース
+    const responseText = await response.text();
+    console.log('📸 Response preview:', responseText.substring(0, 200));
 
     if (!response.ok) {
+      console.error('❌ Upload failed:', { status: response.status, preview: responseText.substring(0, 500) });
       return NextResponse.json(
-        { error: 'Upload failed', details: data },
+        { error: 'Upload failed', details: responseText.substring(0, 500) },
         { status: response.status }
       );
     }
 
+    const data = JSON.parse(responseText);
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('❌ Upload error:', error);
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }

@@ -55,7 +55,11 @@ export function UploadProgressToast({ progress }: UploadProgressProps) {
   );
 }
 
-export function UploadProgressModal({ progress }: UploadProgressProps) {
+interface UploadProgressModalProps extends UploadProgressProps {
+  onClose?: () => void;
+}
+
+export function UploadProgressModal({ progress, onClose }: UploadProgressModalProps) {
   const percentage = Math.floor((progress.completed / progress.total) * 100);
   const isComplete = progress.completed === progress.total;
 
@@ -98,6 +102,15 @@ export function UploadProgressModal({ progress }: UploadProgressProps) {
             <p className="text-sm text-gray-500">
               ※ 画面を閉じないでお待ちください
             </p>
+          )}
+
+          {isComplete && onClose && (
+            <button
+              onClick={onClose}
+              className="mt-4 w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              閉じる
+            </button>
           )}
         </div>
       </div>

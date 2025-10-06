@@ -23,106 +23,11 @@ function UploadPageContent() {
   const placeCode = searchParams.get('place_code') || '';
   const fileSelectorRef = useRef<FileSelectorRef>(null);
 
-  // モックデータ（app/sites/page.tsx と同じデータ）
-  const mockSites = [
-    {
-      site_code: "SITE001",
-      site_name: "〇〇マンション新築工事",
-      site_type: "建築工事",
-      address: "東京都渋谷区〇〇1-2-3",
-      updated_at: "2025-10-03T10:30:00Z",
-      status: "進行中",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE002",
-      site_name: "△△ビル改修工事",
-      site_type: "土木工事",
-      address: "大阪府大阪市〇〇区1-2-3",
-      updated_at: "2025-10-02T14:20:00Z",
-      status: "進行中",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE003",
-      site_name: "××橋梁補修工事",
-      site_type: "土木工事",
-      address: "神奈川県横浜市〇〇区5-6-7",
-      updated_at: "2025-10-01T09:15:00Z",
-      status: "完了",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE004",
-      site_name: "□□駅前再開発工事",
-      site_type: "建築工事",
-      address: "東京都新宿区〇〇2-3-4",
-      updated_at: "2025-09-30T16:45:00Z",
-      status: "進行中",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE005",
-      site_name: "◇◇公園整備工事",
-      site_type: "造園工事",
-      address: "千葉県千葉市〇〇区8-9-10",
-      updated_at: "2025-09-28T11:00:00Z",
-      status: "進行中",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE006",
-      site_name: "☆☆トンネル工事",
-      site_type: "土木工事",
-      address: "静岡県静岡市〇〇区11-12-13",
-      updated_at: "2025-09-25T08:30:00Z",
-      status: "進行中",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE007",
-      site_name: "●●ショッピングモール新築工事",
-      site_type: "建築工事",
-      address: "愛知県名古屋市〇〇区14-15-16",
-      updated_at: "2025-09-20T13:20:00Z",
-      status: "完了",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE008",
-      site_name: "▲▲上下水道工事",
-      site_type: "設備工事",
-      address: "福岡県福岡市〇〇区17-18-19",
-      updated_at: "2025-09-15T10:10:00Z",
-      status: "進行中",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE009",
-      site_name: "■■学校校舎改修工事",
-      site_type: "建築工事",
-      address: "北海道札幌市〇〇区20-21-22",
-      updated_at: "2025-09-10T15:40:00Z",
-      status: "進行中",
-      place_code: "TEST_PLACE_001"
-    },
-    {
-      site_code: "SITE010",
-      site_name: "◆◆浄水場設備更新工事",
-      site_type: "設備工事",
-      address: "宮城県仙台市〇〇区23-24-25",
-      updated_at: "2025-09-05T09:00:00Z",
-      status: "完了",
-      place_code: "TEST_PLACE_001"
-    }
-  ];
-
-  // モックデータから現場情報を取得
-  const siteInfo = mockSites.find(s => s.site_code === siteCode);
-  const initialProjectName = siteInfo?.site_name || '現場名不明';
+  const [siteName, setSiteName] = useState<string>('');
+  const [isLoadingSite, setIsLoadingSite] = useState(true);
 
   const [files, setFiles] = useState<File[]>([]);
-  const [projectName, setProjectName] = useState(initialProjectName);
+  const [projectName, setProjectName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<UploadProgress>({
     total: 0,
@@ -132,7 +37,7 @@ function UploadPageContent() {
   const [showModal, setShowModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewBlackboardInfo, setPreviewBlackboardInfo] = useState<BlackboardInfo>({
-    projectName: initialProjectName,
+    projectName: '',
     workType: '基礎工事',
     weather: '晴れ',
     workContent: '',
@@ -142,16 +47,76 @@ function UploadPageContent() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
 
+  // APIから現場情報を取得
   useEffect(() => {
-    // fetchSiteInfo(); // 本番環境ではコメント解除
-    // モック環境では fetchSiteInfo を使用せず、mockSites から直接取得
+    const fetchSiteInfo = async () => {
+      if (!placeCode || !siteCode) {
+        setIsLoadingSite(false);
+        return;
+      }
+
+      try {
+        console.log('🔵 Fetching site info...', { placeCode, siteCode });
+        const response = await fetch(`/api/dandori/sites?place_code=${placeCode}`);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('🔵 Sites API response:', data);
+
+        if (data.result && data.data && Array.isArray(data.data)) {
+          // URLから現場IDを抽出して比較
+          const site = data.data.find((s: any) => {
+            // まずsite_codeで比較
+            if (s.site_code === siteCode) {
+              return true;
+            }
+            // site_codeが空の場合、URLから抽出
+            if (s.url) {
+              const match = s.url.match(/\/sites\/(\d+)/);
+              if (match && match[1] === siteCode) {
+                return true;
+              }
+            }
+            return false;
+          });
+
+          if (site) {
+            const name = site.name || site.site_name || '現場名不明';
+            console.log('🔵 Found site:', { site_code: siteCode, name });
+            setSiteName(name);
+            setProjectName(name);
+            setPreviewBlackboardInfo(prev => ({
+              ...prev,
+              projectName: name
+            }));
+          } else {
+            console.log('⚠️ Site not found:', siteCode);
+            setSiteName('現場名不明');
+            setProjectName('現場名不明');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch site info:', error);
+        setSiteName('現場名不明');
+        setProjectName('現場名不明');
+      } finally {
+        setIsLoadingSite(false);
+      }
+    };
+
+    fetchSiteInfo();
   }, [placeCode, siteCode]);
 
   useEffect(() => {
-    setPreviewBlackboardInfo(prev => ({
-      ...prev,
-      projectName: projectName
-    }));
+    if (projectName) {
+      setPreviewBlackboardInfo(prev => ({
+        ...prev,
+        projectName: projectName
+      }));
+    }
   }, [projectName]);
 
   // グローバルストアからファイルを復元
@@ -166,21 +131,6 @@ function UploadPageContent() {
       fileStore.clear();
     }
   }, []);
-
-  // 本番環境では使用する関数（現在はモックデータを使用中）
-  // async function fetchSiteInfo() {
-  //   try {
-  //     const response = await fetch(`/api/dandori/sites?place_code=${placeCode}`);
-  //     const data = await response.json();
-  //     const site = data.data?.find((s: { site_code: string; site_name: string }) => s.site_code === siteCode);
-  //     if (site) {
-  //       setProjectName(site.site_name);
-  //     }
-  //   } catch (error) {
-  //     console.error('Failed to fetch site info:', error);
-  //     setProjectName('現場名不明');
-  //   }
-  // }
 
   const handleFilesSelected = (selectedFiles: File[]) => {
     // 既存の写真に新しい写真を追加
@@ -276,12 +226,7 @@ function UploadPageContent() {
         }, '*');
       }
 
-      setTimeout(() => {
-        setShowModal(false);
-        if (window.opener) {
-          window.close();
-        }
-      }, 3000);
+      // モーダルは表示したまま、ユーザーが「閉じる」ボタンをクリックするまで待つ
 
     } catch (error) {
       console.error('Upload failed:', error);
@@ -366,12 +311,7 @@ function UploadPageContent() {
         }, '*');
       }
 
-      setTimeout(() => {
-        setShowModal(false);
-        if (window.opener) {
-          window.close();
-        }
-      }, 3000);
+      // モーダルは表示したまま、ユーザーが「閉じる」ボタンをクリックするまで待つ
 
     } catch (error) {
       console.error('Upload failed:', error);
@@ -541,7 +481,18 @@ function UploadPageContent() {
       </div>
 
       <UploadProgressToast progress={progress} />
-      {showModal && <UploadProgressModal progress={progress} />}
+      {showModal && (
+        <UploadProgressModal
+          progress={progress}
+          onClose={() => {
+            setShowModal(false);
+            // 完了後にウィンドウを閉じる
+            if (window.opener) {
+              window.close();
+            }
+          }}
+        />
+      )}
       {showPreviewModal && previewFile && (
         <PreviewModal
           imageFile={previewFile}
