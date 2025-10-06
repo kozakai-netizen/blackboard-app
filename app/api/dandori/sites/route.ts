@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const url = `${DW_API_BASE}/places/${placeCode}/sites`;
+    const url = `${DW_API_BASE}/co/places/${placeCode}/sites`;
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${BEARER_TOKEN}`

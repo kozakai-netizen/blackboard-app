@@ -40,167 +40,53 @@ export default function SitesPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [roleManagerFilter, setRoleManagerFilter] = useState('');
 
-  const placeCode = 'TEST_PLACE_001'; // モック用の固定値（本番環境では環境変数に戻す）
+  const placeCode = process.env.NEXT_PUBLIC_PLACE_CODE || 'dandoli-sample1';
 
   useEffect(() => {
-    // fetchSites(); // 本番環境ではコメント解除
+    const loadSites = async () => {
+      console.log('🔵 Starting to load sites...')
+      setIsLoading(true)
 
-    // モックデータ（検証用）
-    const mockSites = [
-      {
-        site_code: "SITE001",
-        site_name: "〇〇マンション新築工事",
-        site_type: "建築工事",
-        address: "東京都渋谷区〇〇1-2-3",
-        updated_at: "2025-10-03T10:30:00Z",
-        created_at: "2025-09-01T09:00:00Z",
-        status: "進行中",
-        manager_name: "田中太郎",
-        sub_manager_name: "鈴木一郎",
-        role: "施工管理",
-        role_manager_name: "山田次郎",
-        owner_name: "山田建設株式会社",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE002",
-        site_name: "△△ビル改修工事",
-        site_type: "土木工事",
-        address: "大阪府大阪市〇〇区1-2-3",
-        updated_at: "2025-10-02T14:20:00Z",
-        created_at: "2025-08-15T10:00:00Z",
-        status: "進行中",
-        manager_name: "佐藤花子",
-        sub_manager_name: "田中美咲",
-        role: "安全管理",
-        role_manager_name: "伊藤太郎",
-        owner_name: "鈴木不動産",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE003",
-        site_name: "××橋梁補修工事",
-        site_type: "土木工事",
-        address: "神奈川県横浜市〇〇区5-6-7",
-        updated_at: "2025-10-01T09:15:00Z",
-        created_at: "2025-07-20T08:30:00Z",
-        status: "完了",
-        manager_name: "高橋一郎",
-        sub_manager_name: "佐々木健",
-        role: "品質管理",
-        role_manager_name: "中村花子",
-        owner_name: "横浜市役所",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE004",
-        site_name: "□□駅前再開発工事",
-        site_type: "建築工事",
-        address: "東京都新宿区〇〇2-3-4",
-        updated_at: "2025-09-30T16:45:00Z",
-        created_at: "2025-06-10T11:00:00Z",
-        status: "進行中",
-        manager_name: "田中太郎",
-        sub_manager_name: "小林誠",
-        role: "施工管理",
-        role_manager_name: "山田次郎",
-        owner_name: "都市開発株式会社",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE005",
-        site_name: "◇◇公園整備工事",
-        site_type: "造園工事",
-        address: "千葉県千葉市〇〇区8-9-10",
-        updated_at: "2025-09-28T11:00:00Z",
-        created_at: "2025-08-01T09:30:00Z",
-        status: "進行中",
-        manager_name: "伊藤次郎",
-        sub_manager_name: "渡辺修",
-        role: "工程管理",
-        role_manager_name: "加藤美咲",
-        owner_name: "千葉市役所",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE006",
-        site_name: "☆☆トンネル工事",
-        site_type: "土木工事",
-        address: "静岡県静岡市〇〇区11-12-13",
-        updated_at: "2025-09-25T08:30:00Z",
-        created_at: "2025-05-15T10:00:00Z",
-        status: "進行中",
-        manager_name: "佐藤花子",
-        sub_manager_name: "田中美咲",
-        role: "安全管理",
-        role_manager_name: "伊藤太郎",
-        owner_name: "静岡県庁",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE007",
-        site_name: "●●ショッピングモール新築工事",
-        site_type: "建築工事",
-        address: "愛知県名古屋市〇〇区14-15-16",
-        updated_at: "2025-09-20T13:20:00Z",
-        created_at: "2025-04-01T09:00:00Z",
-        status: "完了",
-        manager_name: "高橋一郎",
-        sub_manager_name: "佐々木健",
-        role: "品質管理",
-        role_manager_name: "中村花子",
-        owner_name: "モール開発株式会社",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE008",
-        site_name: "▲▲上下水道工事",
-        site_type: "設備工事",
-        address: "福岡県福岡市〇〇区17-18-19",
-        updated_at: "2025-09-15T10:10:00Z",
-        created_at: "2025-07-10T08:00:00Z",
-        status: "進行中",
-        manager_name: "伊藤次郎",
-        sub_manager_name: "渡辺修",
-        role: "工程管理",
-        role_manager_name: "加藤美咲",
-        owner_name: "福岡市水道局",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE009",
-        site_name: "■■学校校舎改修工事",
-        site_type: "建築工事",
-        address: "北海道札幌市〇〇区20-21-22",
-        updated_at: "2025-09-10T15:40:00Z",
-        created_at: "2025-06-20T10:30:00Z",
-        status: "進行中",
-        manager_name: "田中太郎",
-        sub_manager_name: "鈴木一郎",
-        role: "施工管理",
-        role_manager_name: "山田次郎",
-        owner_name: "札幌市教育委員会",
-        place_code: "TEST_PLACE_001"
-      },
-      {
-        site_code: "SITE010",
-        site_name: "◆◆浄水場設備更新工事",
-        site_type: "設備工事",
-        address: "宮城県仙台市〇〇区23-24-25",
-        updated_at: "2025-09-05T09:00:00Z",
-        created_at: "2025-05-01T09:00:00Z",
-        status: "完了",
-        manager_name: "佐藤花子",
-        sub_manager_name: "田中美咲",
-        role: "安全管理",
-        role_manager_name: "伊藤太郎",
-        owner_name: "仙台市水道局",
-        place_code: "TEST_PLACE_001"
+      try {
+        console.log('🔵 Fetching /api/dandori/sites with place_code:', placeCode)
+        const response = await fetch(`/api/dandori/sites?place_code=${placeCode}`)
+        console.log('🔵 API response received:', response.status)
+        const data = await response.json()
+        console.log('🔵 Data from API:', data)
+
+        if (data.result && data.data && Array.isArray(data.data)) {
+          const formattedSites = data.data.map((site: any, index: number) => ({
+            site_code: site.site_code || `NO_CODE_${index}`,
+            site_name: site.name || '現場名未設定',
+            site_type: site.site_type || '種別未設定',
+            address: site.address || '住所未設定',
+            updated_at: site.updated_at || new Date().toISOString(),
+            created_at: site.created_at || new Date().toISOString(),
+            status: site.status || '進行中',
+            manager_name: site.manager_name || '',
+            sub_manager_name: site.sub_manager_name || '',
+            role: site.role || '',
+            role_manager_name: site.role_manager_name || '',
+            owner_name: site.owner_name || '',
+            place_code: site.place_code || ''
+          }))
+
+          console.log('🔵 Formatted sites count:', formattedSites.length)
+          setSites(formattedSites)
+          setFilteredSites(formattedSites)
+        } else {
+          console.error('🔴 Invalid data structure:', data)
+        }
+      } catch (error) {
+        console.error('🔴 Error loading sites:', error)
+        setError('現場情報の読み込みに失敗しました')
+      } finally {
+        setIsLoading(false)
+        console.log('🔵 Loading complete')
       }
-    ];
+    }
 
-    setSites(mockSites);
-    setIsLoading(false);
+    loadSites()
   }, []);
 
   useEffect(() => {

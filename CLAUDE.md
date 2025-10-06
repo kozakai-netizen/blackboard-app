@@ -288,7 +288,90 @@ export default function UploadPage() {
 
 ---
 
+---
+
+## Day 7（2025-10-06）: ダンドリワークAPI連携実装完了
+
+### 実装完了内容（すべて✅）
+
+#### 1. ダンドリワークAPI連携（✅完了）
+- **ファイル**: `app/sites/page.tsx`
+- **変更内容**: モックデータを削除し、実際のAPI連携に移行
+- **取得件数**: 169件の現場データ
+
+#### 2. API仕様の修正（✅完了）
+- **問題**: URLパスが `/places/` で404エラー
+- **修正**: `/co/places/` に変更
+- **ファイル**: `app/api/dandori/sites/route.ts`
+
+#### 3. 環境変数の修正（✅完了）
+- **問題**:
+  - API URLが `https://api.dandori.work/v1` で接続エラー
+  - `place_code` が `'TEST_PLACE_001'` という間違った固定値
+- **修正**:
+  - `NEXT_PUBLIC_DW_API_BASE=https://api.dandoli.jp/api`
+  - `placeCode` を環境変数から取得
+
+#### 4. デバッグログ追加（✅完了）
+- console.logで🔵/🔴のアイコン付きログ
+- API呼び出しの流れを可視化
+
+### 技術的な詳細
+
+**最終的なAPI URL**:
+```
+https://api.dandoli.jp/api/co/places/dandoli-sample1/sites
+```
+
+**データフロー**:
+```
+app/sites/page.tsx
+  ↓ fetch(/api/dandori/sites?place_code=dandoli-sample1)
+app/api/dandori/sites/route.ts
+  ↓ fetch(https://api.dandoli.jp/api/co/places/dandoli-sample1/sites)
+ダンドリワークAPI
+  ↓ 169件の現場データを返却
+app/sites/page.tsx
+  ↓ データ整形（name → site_name）
+SiteTable コンポーネント
+  ↓ 画面に現場一覧を表示
+```
+
+### Git履歴
+
+#### Commit 9（2025-10-06予定）
+"feat: ダンドリワークAPI連携実装完了、モックデータ削除、環境変数修正"
+
+#### 修正ファイル一覧
+1. `app/sites/page.tsx` - API連携実装
+2. `app/api/dandori/sites/route.ts` - URLパス修正
+3. `.env.local` - API URLとplace_code修正
+4. `docs/api/dandori-api-spec.md` - API仕様書作成（新規）
+
+### トラブルシューティング履歴
+
+**問題1**: 無限ローディング
+- 原因: モックデータのままだった
+- 解決: API連携に修正
+
+**問題2**: `place_code is required` エラー
+- 原因: クエリパラメータ不足
+- 解決: `?place_code=${placeCode}` 追加
+
+**問題3**: `ENOTFOUND api.dandori.work`
+- 原因: 間違ったAPI URL
+- 解決: `https://api.dandoli.jp/api` に修正
+
+**問題4**: 404エラー
+- 原因: URLパスが `/places/`
+- 解決: `/co/places/` に修正
+
+### 参照ドキュメント
+- API仕様書: `docs/api/dandori-api-spec.md`
+
+---
+
 ## 最終更新
-- 日時: 2025-10-06
-- 状態: Suspense実装完了、Netlifyデプロイ準備完了
-- 次回: ローカルビルド確認→git push→デプロイ確認→スタッフ共有
+- 日時: 2025-10-06 20:30
+- 状態: Day 7完了 - ダンドリワークAPI連携実装完了、169件の現場データ表示成功
+- 次回: 写真アップロード機能のテスト、エラーハンドリング強化
