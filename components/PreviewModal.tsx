@@ -56,10 +56,17 @@ export function PreviewModal({ imageFile, blackboardInfo, onClose }: PreviewModa
         ✕
       </button>
 
-      <div className="max-w-7xl max-h-[90vh] overflow-auto">
+      <div className="flex items-center justify-center w-full h-full">
         <canvas
           ref={canvasRef}
-          className="max-w-full h-auto"
+          className="shadow-2xl"
+          style={{
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain'
+          }}
           onClick={(e) => e.stopPropagation()}
         />
       </div>
@@ -77,38 +84,53 @@ function drawBlackboard(
   width: number,
   height: number
 ) {
-  const padding = Math.max(16, Math.floor(width * 0.02));
-  const blackboardWidth = Math.min(500, width * 0.8);
-  const blackboardHeight = 250;
+  // 黒板の高さ：画像高さの20%
+  const blackboardHeight = height * 0.2;
+  // 黒板の幅：画像幅の80%
+  const blackboardWidth = width * 0.8;
+  // X座標：左寄せ（パディング3%）
+  const xPosition = width * 0.03;
+  // Y座標：下部に配置（画像高さの80%の位置）
+  const yPosition = height * 0.8;
 
+  // 背景
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(padding, padding, blackboardWidth, blackboardHeight);
-  ctx.strokeStyle = 'white';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(padding, padding, blackboardWidth, blackboardHeight);
+  ctx.fillRect(xPosition, yPosition, blackboardWidth, blackboardHeight);
 
+  // 白枠（線の太さを相対的に）
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = Math.max(2, width * 0.003); // canvasサイズに応じて調整
+  ctx.strokeRect(xPosition, yPosition, blackboardWidth, blackboardHeight);
+
+  // テキスト
   ctx.fillStyle = 'white';
   ctx.textBaseline = 'top';
-  const baseFontSize = Math.floor(blackboardHeight * 0.12);
-  const smallFontSize = Math.floor(blackboardHeight * 0.09);
 
-  let y = padding + 20;
-  const lineHeight = baseFontSize + 10;
+  // フォントサイズを黒板サイズに合わせて調整
+  const baseFontSize = Math.floor(blackboardHeight * 0.2);
+  const smallFontSize = Math.floor(blackboardHeight * 0.15);
 
+  let y = yPosition + blackboardHeight * 0.1;
+  const lineHeight = baseFontSize * 1.2;
+
+  // 工事名
   ctx.font = `bold ${baseFontSize}px sans-serif`;
-  ctx.fillText(info.projectName, padding + 20, y);
+  ctx.fillText(truncateText(ctx, info.projectName, blackboardWidth * 0.9), xPosition + blackboardWidth * 0.05, y);
   y += lineHeight;
 
+  // 工種・天候
   ctx.font = `bold ${baseFontSize}px sans-serif`;
-  ctx.fillText(`${info.workType} | ${info.weather}`, padding + 20, y);
+  ctx.fillText(`${info.workType} | ${info.weather}`, xPosition + blackboardWidth * 0.05, y);
   y += lineHeight;
 
+  // 作業内容
   if (info.workContent) {
     ctx.font = `${smallFontSize}px sans-serif`;
-    ctx.fillText(info.workContent, padding + 20, y);
-    y += lineHeight * 0.8;
+    ctx.fillText(truncateText(ctx, info.workContent, blackboardWidth * 0.9), xPosition + blackboardWidth * 0.05, y);
+    y += lineHeight * 0.9;
   }
 
+  // 日時
   ctx.font = `${smallFontSize}px sans-serif`;
   const dateStr = info.timestamp.toLocaleString('ja-JP', {
     year: 'numeric',
@@ -117,9 +139,21 @@ function drawBlackboard(
     hour: '2-digit',
     minute: '2-digit'
   });
-  ctx.fillText(dateStr, padding + 20, y);
+  ctx.fillText(dateStr, xPosition + blackboardWidth * 0.05, y);
 
-  ctx.font = `${smallFontSize * 0.7}px monospace`;
+  // 改ざん検知マーク
+  ctx.font = `${smallFontSize * 0.8}px monospace`;
   ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-  ctx.fillText('SHA-256', padding + blackboardWidth - 80, padding + blackboardHeight - 20);
+  ctx.fillText('SHA-256', xPosition + blackboardWidth * 0.65, yPosition + blackboardHeight * 0.85);
+}
+
+function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  const metrics = ctx.measureText(text);
+  if (metrics.width <= maxWidth) return text;
+
+  let truncated = text;
+  while (ctx.measureText(truncated + '...').width > maxWidth && truncated.length > 0) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + '...';
 }

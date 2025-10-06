@@ -1,9 +1,10 @@
 // app/upload/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { FileSelector } from '@/components/FileSelector';
+import { FileSelector, FileSelectorRef } from '@/components/FileSelector';
+import { fileStore } from '@/lib/fileStore';
 import { BlackboardForm } from '@/components/BlackboardForm';
 import { BlackboardPreview } from '@/components/BlackboardPreview';
 import { ModeSelector } from '@/components/ModeSelector';
@@ -19,6 +20,7 @@ export default function UploadPage() {
   const searchParams = useSearchParams();
   const siteCode = searchParams.get('site_code') || '';
   const placeCode = searchParams.get('place_code') || '';
+  const fileSelectorRef = useRef<FileSelectorRef>(null);
 
   // モックデータ（app/sites/page.tsx と同じデータ）
   const mockSites = [
@@ -137,6 +139,7 @@ export default function UploadPage() {
   });
   const [mode, setMode] = useState<'selection' | 'batch' | 'individual'>('selection');
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
 
   useEffect(() => {
     // fetchSiteInfo(); // 本番環境ではコメント解除
@@ -149,6 +152,19 @@ export default function UploadPage() {
       projectName: projectName
     }));
   }, [projectName]);
+
+  // グローバルストアからファイルを復元
+  useEffect(() => {
+    const storedFiles = fileStore.getFiles();
+    if (storedFiles.length > 0) {
+      setFiles(storedFiles);
+      if (storedFiles.length > 0) {
+        setPreviewFile(storedFiles[0]);
+      }
+      // 使用後はクリア
+      fileStore.clear();
+    }
+  }, []);
 
   async function fetchSiteInfo() {
     try {
@@ -165,10 +181,29 @@ export default function UploadPage() {
   }
 
   const handleFilesSelected = (selectedFiles: File[]) => {
-    setFiles(selectedFiles);
-    if (selectedFiles.length > 0) {
+    // 既存の写真に新しい写真を追加
+    setFiles(prev => [...prev, ...selectedFiles]);
+    if (selectedFiles.length > 0 && files.length === 0) {
       setPreviewFile(selectedFiles[0]);
+      setCurrentPreviewIndex(0);
     }
+  };
+
+  const handleThumbnailClick = (index: number) => {
+    setCurrentPreviewIndex(index);
+    setPreviewFile(files[index]);
+  };
+
+  const handlePrevPhoto = () => {
+    const newIndex = currentPreviewIndex > 0 ? currentPreviewIndex - 1 : files.length - 1;
+    setCurrentPreviewIndex(newIndex);
+    setPreviewFile(files[newIndex]);
+  };
+
+  const handleNextPhoto = () => {
+    const newIndex = currentPreviewIndex < files.length - 1 ? currentPreviewIndex + 1 : 0;
+    setCurrentPreviewIndex(newIndex);
+    setPreviewFile(files[newIndex]);
   };
 
   const handleIndividualSubmit = async (assignments: Map<number, BlackboardInfo>) => {
@@ -349,9 +384,26 @@ export default function UploadPage() {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-[1600px] mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
-          <h1 className="text-2xl font-bold text-gray-800 border-b pb-3">
-            電子小黒板 - 一括登録
-          </h1>
+          {/* ヘッダー */}
+          <div className="flex items-start justify-between border-b pb-3">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">
+                {projectName}
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                {mode === 'individual' ? '個別設定' : '一括登録'}
+              </p>
+            </div>
+            {!isProcessing && (
+              <FileSelector
+                ref={fileSelectorRef}
+                onFilesSelected={handleFilesSelected}
+                maxFiles={50}
+                currentFileCount={files.length}
+                disabled={isProcessing}
+              />
+            )}
+          </div>
 
           {files.length > 0 && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded">
@@ -359,14 +411,6 @@ export default function UploadPage() {
                 ✓ {files.length}枚の写真が選択されています
               </p>
             </div>
-          )}
-
-          {!isProcessing && (
-            <FileSelector
-              onFilesSelected={handleFilesSelected}
-              maxFiles={50}
-              disabled={isProcessing}
-            />
           )}
 
           {files.length > 0 && !isProcessing && (
@@ -383,12 +427,76 @@ export default function UploadPage() {
                   {/* 左2:右1の比率に変更 */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* 左側: プレビュー（2カラム分） */}
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-3">
                       <BlackboardPreview
                         imageFile={previewFile}
                         blackboardInfo={previewBlackboardInfo}
                         onPreviewClick={() => setShowPreviewModal(true)}
                       />
+
+                      {/* サムネイルスライダー */}
+                      {files.length > 1 && (
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center gap-2">
+                            {/* 前へボタン */}
+                            <button
+                              onClick={handlePrevPhoto}
+                              className="flex-shrink-0 p-2 bg-white border rounded-lg hover:bg-gray-100 transition-colors"
+                              title="前の写真"
+                            >
+                              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                              </svg>
+                            </button>
+
+                            {/* サムネイル一覧（横スクロール） */}
+                            <div className="flex-1 overflow-x-auto">
+                              <div className="flex gap-2 pb-2">
+                                {files.map((file, index) => (
+                                  <button
+                                    key={index}
+                                    onClick={() => handleThumbnailClick(index)}
+                                    className={`flex-shrink-0 relative transition-all ${
+                                      index === currentPreviewIndex
+                                        ? 'ring-2 ring-blue-500 scale-105'
+                                        : 'hover:ring-2 hover:ring-gray-300'
+                                    }`}
+                                  >
+                                    <img
+                                      src={URL.createObjectURL(file)}
+                                      alt={`写真 ${index + 1}`}
+                                      className="w-20 h-20 object-cover rounded"
+                                    />
+                                    <div className={`absolute bottom-0 left-0 right-0 text-xs text-center py-0.5 ${
+                                      index === currentPreviewIndex
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-black/50 text-white'
+                                    }`}>
+                                      {index + 1}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* 次へボタン */}
+                            <button
+                              onClick={handleNextPhoto}
+                              className="flex-shrink-0 p-2 bg-white border rounded-lg hover:bg-gray-100 transition-colors"
+                              title="次の写真"
+                            >
+                              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          {/* ページネーション情報 */}
+                          <div className="text-center text-sm text-gray-600 mt-2">
+                            {currentPreviewIndex + 1} / {files.length}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* 右側: 黒板情報入力（1カラム分） */}
@@ -401,6 +509,7 @@ export default function UploadPage() {
                         onSubmit={handleSubmit}
                         onFormChange={(info) => setPreviewBlackboardInfo(info)}
                         disabled={isProcessing}
+                        allowProjectNameEdit={true}
                       />
                     </div>
                   </div>

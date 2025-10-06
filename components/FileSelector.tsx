@@ -1,34 +1,58 @@
 // components/FileSelector.tsx
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useImperativeHandle, forwardRef } from 'react';
 
 interface FileSelectorProps {
   onFilesSelected: (files: File[]) => void;
   maxFiles?: number;
   disabled?: boolean;
+  currentFileCount?: number;
 }
 
-export function FileSelector({
+export interface FileSelectorRef {
+  openDialog: () => void;
+}
+
+export const FileSelector = forwardRef<FileSelectorRef, FileSelectorProps>(({
   onFilesSelected,
   maxFiles = 50,
-  disabled = false
-}: FileSelectorProps) {
+  disabled = false,
+  currentFileCount = 0
+}, ref) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []).slice(0, maxFiles);
+    const selectedFiles = Array.from(e.target.files || []);
+    const remainingSlots = maxFiles - currentFileCount;
+    const files = selectedFiles.slice(0, remainingSlots);
+
+    if (selectedFiles.length > remainingSlots && remainingSlots > 0) {
+      alert(`最大${maxFiles}枚まで選択できます。残り${remainingSlots}枚まで追加できます。`);
+    } else if (remainingSlots <= 0) {
+      alert(`最大${maxFiles}枚に達しています。これ以上追加できません。`);
+      e.target.value = '';
+      return;
+    }
+
     if (files.length > 0) {
       onFilesSelected(files);
     }
+    e.target.value = '';
   };
 
   const handleClick = () => {
     inputRef.current?.click();
   };
 
+  useImperativeHandle(ref, () => ({
+    openDialog: () => {
+      inputRef.current?.click();
+    }
+  }));
+
   return (
-    <div className="space-y-4">
+    <div>
       <input
         ref={inputRef}
         type="file"
@@ -43,16 +67,14 @@ export function FileSelector({
         type="button"
         onClick={handleClick}
         disabled={disabled}
-        className="w-full py-4 px-6 bg-blue-600 text-white rounded-lg
+        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg
                    hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed
-                   font-bold text-lg transition-colors"
+                   font-semibold text-sm transition-colors inline-flex items-center gap-2"
       >
-        📷 写真を選ぶ（最大{maxFiles}枚）
+        📷 写真を追加
       </button>
-
-      <p className="text-sm text-gray-600 text-center">
-        ライブラリから写真を選択してください
-      </p>
     </div>
   );
-}
+});
+
+FileSelector.displayName = 'FileSelector';

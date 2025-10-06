@@ -10,6 +10,7 @@ interface BlackboardFormProps {
   onFormChange?: (info: BlackboardInfo) => void;
   disabled?: boolean;
   hideSubmitButton?: boolean;
+  allowProjectNameEdit?: boolean;
 }
 
 const WORK_TYPES = [
@@ -27,9 +28,10 @@ const WORK_TYPES = [
 
 const WEATHER_OPTIONS = ['晴れ', '曇り', '雨', '雪'];
 
-export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled = false, hideSubmitButton = false }: BlackboardFormProps) {
-  const [workType, setWorkType] = useState(WORK_TYPES[0]);
-  const [weather, setWeather] = useState(WEATHER_OPTIONS[0]);
+export function BlackboardForm({ projectName: initialProjectName, onSubmit, onFormChange, disabled = false, hideSubmitButton = false, allowProjectNameEdit = false }: BlackboardFormProps) {
+  const [projectName, setProjectName] = useState(allowProjectNameEdit ? '' : initialProjectName);
+  const [workType, setWorkType] = useState('');
+  const [weather, setWeather] = useState('');
   const [workContent, setWorkContent] = useState('');
   const [timestamp, setTimestamp] = useState(new Date());
 
@@ -61,11 +63,33 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          工事名
+          工事名 {allowProjectNameEdit && <span className="text-xs text-gray-500">(任意)</span>}
         </label>
-        <div className="p-3 bg-gray-100 rounded border text-gray-700">
-          {projectName}
-        </div>
+        {allowProjectNameEdit ? (
+          <input
+            type="text"
+            value={projectName}
+            onChange={e => {
+              const newProjectName = e.target.value;
+              setProjectName(newProjectName);
+              onFormChange?.({
+                projectName: newProjectName,
+                workType,
+                weather,
+                workContent: workContent.trim() || undefined,
+                timestamp
+              });
+            }}
+            disabled={disabled}
+            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
+                       disabled:bg-gray-100 text-base"
+            placeholder="工事名を入力"
+          />
+        ) : (
+          <div className="p-3 bg-gray-100 rounded border text-gray-700">
+            {projectName}
+          </div>
+        )}
       </div>
 
       <div>
@@ -111,12 +135,13 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
             });
           }}
           disabled={disabled}
-          className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
-                     disabled:bg-gray-100 text-base"
+          className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
+                     disabled:bg-gray-100 text-base ${!workType ? 'text-gray-400' : 'text-gray-900'}`}
           required
         >
+          <option value="" className="text-gray-400">工種を選択</option>
           {WORK_TYPES.map(type => (
-            <option key={type} value={type}>{type}</option>
+            <option key={type} value={type} className="text-gray-900">{type}</option>
           ))}
         </select>
       </div>
@@ -139,12 +164,13 @@ export function BlackboardForm({ projectName, onSubmit, onFormChange, disabled =
             });
           }}
           disabled={disabled}
-          className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
-                     disabled:bg-gray-100 text-base"
+          className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
+                     disabled:bg-gray-100 text-base ${!weather ? 'text-gray-400' : 'text-gray-900'}`}
           required
         >
+          <option value="" className="text-gray-400">天候を選択</option>
           {WEATHER_OPTIONS.map(w => (
-            <option key={w} value={w}>{w}</option>
+            <option key={w} value={w} className="text-gray-900">{w}</option>
           ))}
         </select>
       </div>

@@ -26,6 +26,8 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
   });
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewPhotoIndex, setPreviewPhotoIndex] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
   // 選択中の1枚目のファイル
   const previewFile = selectedIndices.size > 0
@@ -119,6 +121,12 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
     onSubmit(assignments);
   };
 
+  // ページネーション計算
+  const totalPages = Math.ceil(files.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentFiles = files.slice(startIndex, endIndex);
+
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto">
       {/* PC: 3分割、スマホ: タブ切り替え */}
@@ -137,8 +145,17 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
           <p className="text-sm text-gray-600 mb-4">
             選択中: {selectedIndices.size}枚 / 設定済み: {assignments.size}枚
           </p>
-          <div className="grid grid-cols-2 gap-2 max-h-[600px] overflow-y-auto">
-            {files.map((file, index) => {
+
+          {/* ページネーション情報 */}
+          {totalPages > 1 && (
+            <div className="text-xs text-gray-500 mb-2">
+              {startIndex + 1} - {Math.min(endIndex, files.length)} / {files.length}枚
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {currentFiles.map((file, idx) => {
+              const index = startIndex + idx;
               const selectionOrder = getSelectionOrder(index);
               const isSelected = selectedIndices.has(index);
               const isAssigned = assignments.has(index);
@@ -207,16 +224,44 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
               );
             })}
           </div>
+
+          {/* ページネーションコントロール */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2 border-t">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ←
+              </button>
+              <span className="text-sm text-gray-600">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 中央: プレビュー */}
         <div className="lg:col-span-5">
           {previewFile ? (
-            <BlackboardPreview
-              imageFile={previewFile}
-              blackboardInfo={currentBlackboardInfo}
-              onPreviewClick={() => setShowPreviewModal(true)}
-            />
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600 text-center">
+                選択中の1枚目を表示
+              </p>
+              <BlackboardPreview
+                imageFile={previewFile}
+                blackboardInfo={currentBlackboardInfo}
+                onPreviewClick={() => setShowPreviewModal(true)}
+              />
+            </div>
           ) : (
             <div className="bg-gray-100 rounded-lg p-8 text-center text-gray-500 h-full flex items-center justify-center">
               写真を選択してください
@@ -235,6 +280,7 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
             onFormChange={setCurrentBlackboardInfo}
             disabled={selectedIndices.size === 0}
             hideSubmitButton={true}
+            allowProjectNameEdit={true}
           />
           <button
             onClick={handleApply}
