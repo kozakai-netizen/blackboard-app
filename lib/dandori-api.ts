@@ -1,7 +1,8 @@
 // lib/dandori-api.ts
 import type { DandoriSite, DandoriUploadResponse } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_DW_API_BASE!;
+// API_BASE は将来の直接API呼び出し用（現在は未使用）
+// const API_BASE = process.env.NEXT_PUBLIC_DW_API_BASE!;
 
 export async function getSites(placeCode: string): Promise<DandoriSite[]> {
   const response = await fetch(`/api/dandori/sites?place_code=${placeCode}`);

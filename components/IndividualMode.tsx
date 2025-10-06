@@ -1,7 +1,8 @@
 // components/IndividualMode.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import Image from 'next/image';
 import { BlackboardPreview } from './BlackboardPreview';
 import { BlackboardForm } from './BlackboardForm';
 import { PreviewModal } from './PreviewModal';
@@ -190,11 +191,14 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
                   </div>
 
                   {/* 写真 */}
-                  <img
-                    src={URL.createObjectURL(file)}
-                    alt={`写真 ${index + 1}`}
-                    className="w-full h-24 object-cover rounded"
-                  />
+                  <div className="relative w-full h-24">
+                    <Image
+                      src={URL.createObjectURL(file)}
+                      alt={`写真 ${index + 1}`}
+                      fill
+                      className="object-cover rounded"
+                    />
+                  </div>
 
                   {/* 選択順番号（チェックボックスの右横） */}
                   {isSelected && selectionOrder !== null && (
@@ -276,7 +280,7 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
           </h3>
           <BlackboardForm
             projectName={projectName}
-            onSubmit={(e) => e.preventDefault()}
+            onSubmit={() => {}} // hideSubmitButton=true なので呼ばれない
             onFormChange={setCurrentBlackboardInfo}
             disabled={selectedIndices.size === 0}
             hideSubmitButton={true}

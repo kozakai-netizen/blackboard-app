@@ -205,6 +205,7 @@ export default function SitesPage() {
 
   useEffect(() => {
     filterSites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sites, siteName, siteTypeFilter, statusFilter, keyword, createdFrom, createdTo, managerFilter, subManagerFilter, roleFilter, roleManagerFilter]);
 
   async function fetchSites() {
@@ -225,9 +226,10 @@ export default function SitesPage() {
       } else {
         throw new Error('データ形式が不正です');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fetch sites:', error);
-      setError(error.message || '現場データの取得に失敗しました');
+      const errorMessage = error instanceof Error ? error.message : '現場データの取得に失敗しました';
+      setError(errorMessage);
       setSites([]); // エラー時は空配列を設定
     } finally {
       setIsLoading(false); // 必ず実行される

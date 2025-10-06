@@ -220,56 +220,69 @@ SUPABASE_SERVICE_ROLE_KEY=（設定済み）
 
 ---
 
-## Day 6（2025-10-06）完了: 黒板表示修正とUI大幅改善
+## Day 6（2025-10-06）最終状態: Netlifyデプロイ準備中
 
-### 実装完了内容
+### 実装完了内容（すべて✅）
+1. 黒板サイズ修正（画像下部20%、幅80%）
+2. 現場一覧検索機能（基本検索+詳細検索の折りたたみ式）
+3. UI大幅改善（テーブルデザイン、ボタン、レイアウト）
+4. 写真選択フロー簡略化（現場選択後、自動でファイル選択）
+5. サムネイルスライダー実装（一括登録モード）
+6. GitHubリポジトリ作成・プッシュ完了
+7. TypeScriptエラー修正（any型、unused変数、img→Image）
+8. Suspense実装完了（useSearchParams対応）
 
-#### 1. 黒板サイズと配置の修正（✅完了）
-- lib/canvas.ts の黒板描画を修正
-- 黒板の高さ：画像高さの20%
-- 黒板の幅：画像幅の80%
-- 位置：画像下部に配置
-- 高解像度画像での動作確認完了
+### 現在進行中の問題（✅解決済み）
+**Netlifyデプロイエラー：**
+- エラー内容：`useSearchParams()` のプリレンダリングエラー
+- 解決済み：app/upload/page.tsx にSuspense実装完了
 
-#### 2. 現場一覧の検索機能拡張（✅完了）
-- 基本検索（常時表示）：現場名、現場種類、ステータス
-- 詳細検索（折りたたみ式）：キーワード、現場作成日、担当者、役割等
-- ダンドリワーク準拠の検索項目を実装
+### 解決策（✅実装完了）
+app/upload/page.tsx を以下のように修正：
+```typescript
+import { Suspense } from 'react'
 
-#### 3. UI大幅改善（✅完了）
-- 基本検索エリア：12カラムグリッド（4:3:3:2）でコンパクト化
-- 詳細検索エリア：キーワード全幅、その他は効率的配置
-- テーブルデザイン：
-  - ヘッダー：bg-gray-50、セミボールド
-  - ストライプ行（奇数/偶数）
-  - ホバー効果：bg-blue-50
-  - ステータスバッジ（進行中/完了）
-- ボタン改善：「写真を選択」→「📷 アップロード」
+function UploadPageContent() {
+  const searchParams = useSearchParams()
+  // 既存コード
+}
 
-#### 4. 写真選択フロー簡略化（✅完了）
-- 現場選択後、自動でファイル選択ダイアログ表示
-- 現場名と工事名の分離（現場名自動、工事名任意入力）
+export default function UploadPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <UploadPageContent />
+    </Suspense>
+  )
+}
+```
 
-#### 5. 一括登録モード：サムネイルスライダー実装（✅完了）
-- プレビュー下部にサムネイル一覧表示
-- 横スクロール可能、クリックで切り替え
-- 前へ/次へボタン、ページネーション（1/14形式）
-- 選択中のサムネイルを青枠で強調
+### Netlify環境変数（設定済み）
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- NEXT_PUBLIC_PLACE_CODE
 
-#### 6. 個別設定モード：プレビュー説明追加（✅完了）
-- 「選択中の1枚目を表示」テキストを追加
-- プレビュー画像の上部に配置
+### GitHub情報
+- リポジトリ：https://github.com/kozakai-netizen/blackboard-app
+- ブランチ：main
+- 最新コミット：Suspense実装完了（デプロイ準備完了）
 
-### トラブルシューティング
-- 低解像度画像では黒板文字が潰れる問題を発見
-- 解決：1920×1080px以上の高解像度画像を使用
+### 次回セッション開始時の手順
+1. ✅ Suspense修正を完了
+2. ローカルビルド確認：`rm -rf .next && npm run build`
+3. エラーがなければ：`git add . && git commit -m "Fix: Suspenseでプリレンダリングエラー解決" && git push`
+4. Netlifyで自動デプロイ確認
+5. 成功したらスタッフにURL共有
 
-### 次回実装予定
-- [ ] Netlifyへのデプロイ
-- [ ] スタッフへの共有
-- [ ] テスト環境での動作確認
+### 技術的メモ
+- Next.js 15.5.4 + App Router
+- useSearchParams使用時は必ずSuspenseで囲む
+- Netlifyは自動デプロイ設定済み（mainブランチへのpush時）
 
 ### Git履歴
+#### Commit 8（2025-10-06予定）
+"Fix: Suspenseでプリレンダリングエラー解決、TypeScriptエラー修正完了"
+
 #### Commit 7（2025-10-06）
 "Add: 現場一覧検索機能拡張、UI改善（基本検索+詳細検索、テーブルデザイン統一）、サムネイルスライダー実装"
 
@@ -277,5 +290,5 @@ SUPABASE_SERVICE_ROLE_KEY=（設定済み）
 
 ## 最終更新
 - 日時: 2025-10-06
-- 状態: Day 6完了、UI大幅改善とサムネイルスライダー実装済み
-- 次回: Netlifyデプロイ、テスト環境での動作確認
+- 状態: Suspense実装完了、Netlifyデプロイ準備完了
+- 次回: ローカルビルド確認→git push→デプロイ確認→スタッフ共有

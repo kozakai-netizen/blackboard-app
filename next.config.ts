@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    unoptimized: true, // blob URLs用に最適化を無効化
+  },
 };
 
 export default nextConfig;

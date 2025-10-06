@@ -1,8 +1,9 @@
 // app/upload/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { FileSelector, FileSelectorRef } from '@/components/FileSelector';
 import { fileStore } from '@/lib/fileStore';
 import { BlackboardForm } from '@/components/BlackboardForm';
@@ -16,7 +17,7 @@ import { uploadPhotosInChunks } from '@/lib/dandori-api';
 import { saveManifest } from '@/lib/supabase';
 import type { BlackboardInfo, UploadProgress, Manifest } from '@/types';
 
-export default function UploadPage() {
+function UploadPageContent() {
   const searchParams = useSearchParams();
   const siteCode = searchParams.get('site_code') || '';
   const placeCode = searchParams.get('place_code') || '';
@@ -166,19 +167,20 @@ export default function UploadPage() {
     }
   }, []);
 
-  async function fetchSiteInfo() {
-    try {
-      const response = await fetch(`/api/dandori/sites?place_code=${placeCode}`);
-      const data = await response.json();
-      const site = data.data?.find((s: any) => s.site_code === siteCode);
-      if (site) {
-        setProjectName(site.site_name);
-      }
-    } catch (error) {
-      console.error('Failed to fetch site info:', error);
-      setProjectName('現場名不明');
-    }
-  }
+  // 本番環境では使用する関数（現在はモックデータを使用中）
+  // async function fetchSiteInfo() {
+  //   try {
+  //     const response = await fetch(`/api/dandori/sites?place_code=${placeCode}`);
+  //     const data = await response.json();
+  //     const site = data.data?.find((s: { site_code: string; site_name: string }) => s.site_code === siteCode);
+  //     if (site) {
+  //       setProjectName(site.site_name);
+  //     }
+  //   } catch (error) {
+  //     console.error('Failed to fetch site info:', error);
+  //     setProjectName('現場名不明');
+  //   }
+  // }
 
   const handleFilesSelected = (selectedFiles: File[]) => {
     // 既存の写真に新しい写真を追加
@@ -235,7 +237,7 @@ export default function UploadPage() {
         '施工中',
         '100033',
         uploadFiles,
-        (completed, total) => {
+        (completed) => {
           setProgress(prev => ({ ...prev, completed }));
         }
       );
@@ -250,7 +252,7 @@ export default function UploadPage() {
         createdAtClient: new Date().toISOString(),
         hashAlgorithm: 'SHA-256',
         blackboardInfo: processedList[0] ? Array.from(assignments.values())[0] : {} as BlackboardInfo,
-        files: processedList.map((p, i) => ({
+        files: processedList.map((p) => ({
           localId: crypto.randomUUID(),
           originalFilename: p.originalFile.name,
           uploadedFilename: p.filename,
@@ -326,7 +328,7 @@ export default function UploadPage() {
         '施工中',
         '100033',
         uploadFiles,
-        (completed, total) => {
+        (completed) => {
           setProgress(prev => ({ ...prev, completed }));
         }
       );
@@ -340,7 +342,7 @@ export default function UploadPage() {
         createdAtClient: new Date().toISOString(),
         hashAlgorithm: 'SHA-256',
         blackboardInfo,
-        files: processed.map((p, i) => ({
+        files: processed.map((p) => ({
           localId: crypto.randomUUID(),
           originalFilename: p.originalFile.name,
           uploadedFilename: p.filename,
@@ -462,9 +464,11 @@ export default function UploadPage() {
                                         : 'hover:ring-2 hover:ring-gray-300'
                                     }`}
                                   >
-                                    <img
+                                    <Image
                                       src={URL.createObjectURL(file)}
                                       alt={`写真 ${index + 1}`}
+                                      width={80}
+                                      height={80}
                                       className="w-20 h-20 object-cover rounded"
                                     />
                                     <div className={`absolute bottom-0 left-0 right-0 text-xs text-center py-0.5 ${
@@ -546,5 +550,13 @@ export default function UploadPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function UploadPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <UploadPageContent />
+    </Suspense>
   );
 }
