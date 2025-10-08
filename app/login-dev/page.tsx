@@ -50,6 +50,16 @@ export default function LoginDevPage() {
         <p className="text-sm text-gray-500 text-center mt-6">
           ※開発環境専用のログイン選択画面です
         </p>
+
+        {/* 管理画面へのリンク */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <button
+            onClick={() => router.push('/admin')}
+            className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition text-sm"
+          >
+            ⚙️ 管理画面（動作確認）
+          </button>
+        </div>
       </div>
     </div>
   )

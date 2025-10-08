@@ -41,9 +41,9 @@ export async function POST(request: NextRequest) {
     const apiUrl = `${baseUrl}/co/places/${placeCode}/sites/${siteCode}/site_photos`;
 
     const apiFormData = new FormData();
-    apiFormData.append('category_name', categoryName as string);
+    apiFormData.append('category_name', encodeURIComponent(categoryName as string));
     apiFormData.append('data[files][]', file);
-    apiFormData.append('update_crew', 'user1'); // 仮のユーザー
+    // update_crewパラメータを削除して動作確認
 
     console.log('📸 Uploading to:', apiUrl);
 

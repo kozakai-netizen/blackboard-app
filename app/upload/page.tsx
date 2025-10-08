@@ -15,7 +15,8 @@ import { UploadProgressToast, UploadProgressModal } from '@/components/UploadPro
 import { processImages, processImage } from '@/lib/canvas';
 import { uploadPhotosInChunks } from '@/lib/dandori-api';
 import { saveManifest } from '@/lib/supabase';
-import type { BlackboardInfo, UploadProgress, Manifest } from '@/types';
+import { getAllTemplates, getDefaultTemplate } from '@/lib/templates';
+import type { BlackboardInfo, UploadProgress, Manifest, Template } from '@/types';
 
 function UploadPageContent() {
   const searchParams = useSearchParams();
@@ -25,6 +26,11 @@ function UploadPageContent() {
 
   const [siteName, setSiteName] = useState<string>('');
   const [isLoadingSite, setIsLoadingSite] = useState(true);
+
+  // テンプレート関連
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
 
   const [files, setFiles] = useState<File[]>([]);
   const [projectName, setProjectName] = useState('');
@@ -46,6 +52,49 @@ function UploadPageContent() {
   const [mode, setMode] = useState<'selection' | 'batch' | 'individual'>('selection');
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
+
+  // テンプレートを取得
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const allTemplates = await getAllTemplates();
+        setTemplates(allTemplates);
+
+        // デフォルトテンプレートを選択
+        const defaultTemplate = await getDefaultTemplate();
+        if (defaultTemplate) {
+          setSelectedTemplate(defaultTemplate);
+        } else if (allTemplates.length > 0) {
+          setSelectedTemplate(allTemplates[0]);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load templates:', error);
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    fetchTemplates();
+  }, []);
+
+  // テンプレート選択時にデフォルト値を適用
+  useEffect(() => {
+    if (selectedTemplate) {
+      const defaultValues = selectedTemplate.defaultValues;
+      setPreviewBlackboardInfo(prev => ({
+        ...prev,
+        projectName: projectName || prev.projectName,
+        workType: (defaultValues.工種 as string) || prev.workType,
+        workCategory: (defaultValues.種別 as string) || prev.workCategory,
+        workDetail: (defaultValues.細別 as string) || prev.workDetail,
+        contractor: (defaultValues.施工者 as string) || prev.contractor,
+        location: (defaultValues.撮影場所 as string) || prev.location,
+        station: (defaultValues.測点位置 as string) || prev.station,
+        witness: (defaultValues.立会者 as string) || prev.witness,
+        remarks: (defaultValues.備考 as string) || prev.remarks,
+      }));
+    }
+  }, [selectedTemplate, projectName]);
 
   // APIから現場情報を取得
   useEffect(() => {
@@ -356,7 +405,62 @@ function UploadPageContent() {
           )}
 
           {files.length > 0 && !isProcessing && (
-            <div className="pt-4 border-t">
+            <div className="pt-4 border-t space-y-6">
+              {/* テンプレート選択 */}
+              <div className="bg-white rounded-lg border p-6">
+                <h2 className="text-lg font-semibold mb-4">📝 黒板テンプレート選択</h2>
+                {isLoadingTemplates ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-gray-600 text-sm">読み込み中...</p>
+                  </div>
+                ) : templates.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-600 mb-4">テンプレートが登録されていません</p>
+                    <button
+                      onClick={() => window.open('/admin/templates/new', '_blank')}
+                      className="text-blue-600 hover:text-blue-700 underline"
+                    >
+                      テンプレートを作成する
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {templates.map((template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => setSelectedTemplate(template)}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          selectedTemplate?.id === template.id
+                            ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="font-bold text-sm">{template.name}</h3>
+                          {template.isDefault && (
+                            <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                              デフォルト
+                            </span>
+                          )}
+                          {selectedTemplate?.id === template.id && (
+                            <span className="text-blue-600">✓</span>
+                          )}
+                        </div>
+                        {template.description && (
+                          <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                            {template.description}
+                          </p>
+                        )}
+                        <div className="text-xs text-gray-500">
+                          {template.fields.length}個の項目
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {mode === 'selection' && (
                 <ModeSelector
                   onSelectMode={(selectedMode) => setMode(selectedMode)}
