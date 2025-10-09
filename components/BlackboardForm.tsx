@@ -49,69 +49,88 @@ export function BlackboardForm({
   const [projectName, setProjectName] = useState(allowProjectNameEdit ? '' : initialProjectName);
   const [timestamp, setTimestamp] = useState(new Date());
 
-  // テンプレートの全項目用のstate
-  const [workType, setWorkType] = useState('');
-  const [weather, setWeather] = useState('');
-  const [workCategory, setWorkCategory] = useState('');
-  const [workDetail, setWorkDetail] = useState('');
-  const [contractor, setContractor] = useState('');
-  const [location, setLocation] = useState('');
-  const [station, setStation] = useState('');
-  const [witness, setWitness] = useState('');
-  const [remarks, setRemarks] = useState('');
+  // テンプレートのデフォルト値で初期化
+  const [workType, setWorkType] = useState((template.defaultValues?.工種 as string) || '');
+  const [weather, setWeather] = useState((template.defaultValues?.天候 as string) || '');
+  const [workCategory, setWorkCategory] = useState((template.defaultValues?.種別 as string) || '');
+  const [workDetail, setWorkDetail] = useState((template.defaultValues?.細別 as string) || '');
+  const [contractor, setContractor] = useState((template.defaultValues?.施工者 as string) || '');
+  const [location, setLocation] = useState((template.defaultValues?.撮影場所 as string) || '');
+  const [station, setStation] = useState((template.defaultValues?.測点位置 as string) || '');
+  const [witness, setWitness] = useState((template.defaultValues?.立会者 as string) || '');
+  const [remarks, setRemarks] = useState((template.defaultValues?.備考 as string) || '');
 
   // initialValuesが変更されたら、ローカルstateを更新
+  // 依存配列はinitialValuesの個別プロパティのみ（ローカルstateは含めない）
   useEffect(() => {
     if (!initialValues) return;
 
-    if (initialValues.workType !== undefined && initialValues.workType !== workType) {
+    if (initialValues.workType !== undefined) {
       setWorkType(initialValues.workType);
     }
-    if (initialValues.weather !== undefined && initialValues.weather !== weather) {
+    if (initialValues.weather !== undefined) {
       setWeather(initialValues.weather);
     }
-    if (initialValues.workCategory !== undefined && initialValues.workCategory !== workCategory) {
+    if (initialValues.workCategory !== undefined) {
       setWorkCategory(initialValues.workCategory);
     }
-    if (initialValues.workDetail !== undefined && initialValues.workDetail !== workDetail) {
+    if (initialValues.workDetail !== undefined) {
       setWorkDetail(initialValues.workDetail);
     }
-    if (initialValues.contractor !== undefined && initialValues.contractor !== contractor) {
+    if (initialValues.contractor !== undefined) {
       setContractor(initialValues.contractor);
     }
-    if (initialValues.location !== undefined && initialValues.location !== location) {
+    if (initialValues.location !== undefined) {
       setLocation(initialValues.location);
     }
-    if (initialValues.station !== undefined && initialValues.station !== station) {
+    if (initialValues.station !== undefined) {
       setStation(initialValues.station);
     }
-    if (initialValues.witness !== undefined && initialValues.witness !== witness) {
+    if (initialValues.witness !== undefined) {
       setWitness(initialValues.witness);
     }
-    if (initialValues.remarks !== undefined && initialValues.remarks !== remarks) {
+    if (initialValues.remarks !== undefined) {
       setRemarks(initialValues.remarks);
     }
-    if (initialValues.timestamp && initialValues.timestamp !== timestamp) {
+    if (initialValues.timestamp) {
       setTimestamp(initialValues.timestamp);
     }
-  }, [initialValues]);
+  }, [
+    initialValues?.workType,
+    initialValues?.weather,
+    initialValues?.workCategory,
+    initialValues?.workDetail,
+    initialValues?.contractor,
+    initialValues?.location,
+    initialValues?.station,
+    initialValues?.witness,
+    initialValues?.remarks,
+    initialValues?.timestamp?.getTime()
+  ]);
 
-  // フォーム変更時の通知
+  // フォーム変更時の通知（デバウンス処理）
   useEffect(() => {
-    const info: BlackboardInfo = {
-      projectName,
-      timestamp,
-      workType: workType || undefined,
-      weather: weather || undefined,
-      workCategory: workCategory || undefined,
-      workDetail: workDetail || undefined,
-      contractor: contractor || undefined,
-      location: location || undefined,
-      station: station || undefined,
-      witness: witness || undefined,
-      remarks: remarks || undefined,
+    // 50ms デバウンス: 高速入力時の不要な再描画を防ぐ
+    const timeoutId = setTimeout(() => {
+      const info: BlackboardInfo = {
+        projectName,
+        timestamp,
+        workType: workType || undefined,
+        weather: weather || undefined,
+        workCategory: workCategory || undefined,
+        workDetail: workDetail || undefined,
+        contractor: contractor || undefined,
+        location: location || undefined,
+        station: station || undefined,
+        witness: witness || undefined,
+        remarks: remarks || undefined,
+      };
+      onFormChange?.(info);
+    }, 50);
+
+    return () => {
+      clearTimeout(timeoutId);
     };
-    onFormChange?.(info);
   }, [projectName, timestamp.getTime(), workType, weather, workCategory, workDetail, contractor, location, station, witness, remarks, onFormChange]);
 
   const handleSubmit = (e: React.FormEvent) => {

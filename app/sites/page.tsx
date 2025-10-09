@@ -30,6 +30,37 @@ export default function SitesPage() {
   const [selectedType, setSelectedType] = useState('すべて')
   const [selectedStatus, setSelectedStatus] = useState('すべて')
   const [userType, setUserType] = useState<string | null>(null)
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false)
+
+  // 詳細検索フィルター
+  const [keyword, setKeyword] = useState('')
+  const [createdFrom, setCreatedFrom] = useState('')
+  const [createdTo, setCreatedTo] = useState('')
+  const [managerFilter, setManagerFilter] = useState('')
+  const [subManagerFilter, setSubManagerFilter] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
+  const [roleManagerFilter, setRoleManagerFilter] = useState('')
+
+  // プルダウン用の選択肢（APIから取得するか、現場データから抽出）
+  const [managers, setManagers] = useState<string[]>([])
+  const [subManagers, setSubManagers] = useState<string[]>([])
+  const [roles, setRoles] = useState<string[]>([])
+  const [roleManagers, setRoleManagers] = useState<string[]>([])
+
+  // 現場データから選択肢を抽出
+  useEffect(() => {
+    if (sites.length === 0) return
+
+    const uniqueManagers = Array.from(new Set(sites.map(s => s.manager_name).filter(Boolean))) as string[]
+    const uniqueSubManagers = Array.from(new Set(sites.map(s => s.sub_manager_name).filter(Boolean))) as string[]
+    const uniqueRoles = Array.from(new Set(sites.map(s => s.role).filter(Boolean))) as string[]
+    const uniqueRoleManagers = Array.from(new Set(sites.map(s => s.role_manager_name).filter(Boolean))) as string[]
+
+    setManagers(uniqueManagers)
+    setSubManagers(uniqueSubManagers)
+    setRoles(uniqueRoles)
+    setRoleManagers(uniqueRoleManagers)
+  }, [sites])
 
   // ユーザー情報を取得
   useEffect(() => {
@@ -89,6 +120,9 @@ export default function SitesPage() {
                      site.site_status === 5 ? '中止' :
                      site.site_status === 6 ? '他決' : '進行中',
               manager_name: site.manager?.admin || '',
+              sub_manager_name: site.sub_manager?.admin || '',
+              role: site.role?.name || '',
+              role_manager_name: site.role_manager?.admin || '',
               owner_name: site.customer?.name || '',
               place_code: site.place_code || placeCode
             };
@@ -111,6 +145,7 @@ export default function SitesPage() {
   useEffect(() => {
     let result = sites
 
+    // 基本検索
     if (searchTerm) {
       result = result.filter(site =>
         site.site_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -126,8 +161,53 @@ export default function SitesPage() {
       result = result.filter(site => site.status === selectedStatus)
     }
 
+    // 詳細検索
+    if (keyword) {
+      const query = keyword.toLowerCase()
+      result = result.filter(site =>
+        site.site_name.toLowerCase().includes(query) ||
+        site.owner_name?.toLowerCase().includes(query) ||
+        site.address?.toLowerCase().includes(query)
+      )
+    }
+
+    if (createdFrom) {
+      result = result.filter(site => site.created_at && site.created_at >= createdFrom)
+    }
+
+    if (createdTo) {
+      result = result.filter(site => site.created_at && site.created_at <= createdTo)
+    }
+
+    if (managerFilter) {
+      result = result.filter(site =>
+        site.manager_name?.toLowerCase().includes(managerFilter.toLowerCase())
+      )
+    }
+
+    if (subManagerFilter) {
+      result = result.filter(site =>
+        site.sub_manager_name?.toLowerCase().includes(subManagerFilter.toLowerCase())
+      )
+    }
+
+    if (roleFilter) {
+      result = result.filter(site =>
+        site.role?.toLowerCase().includes(roleFilter.toLowerCase())
+      )
+    }
+
+    if (roleManagerFilter) {
+      result = result.filter(site =>
+        site.role_manager_name?.toLowerCase().includes(roleManagerFilter.toLowerCase())
+      )
+    }
+
     setFilteredSites(result)
-  }, [searchTerm, selectedType, selectedStatus, sites])
+  }, [
+    searchTerm, selectedType, selectedStatus, sites,
+    keyword, createdFrom, createdTo, managerFilter, subManagerFilter, roleFilter, roleManagerFilter
+  ])
 
   if (error) {
     return (
@@ -240,13 +320,131 @@ export default function SitesPage() {
           </div>
 
           <div className="flex items-center justify-between mb-4">
-            <button className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800">
-              🔍 詳細検索 ▼
-            </button>
-            <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-              検索
+            <button
+              onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+              className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800"
+            >
+              🔍 詳細検索 {showAdvancedSearch ? '▲' : '▼'}
             </button>
           </div>
+
+          {showAdvancedSearch && (
+            <div className="pt-4 border-t border-gray-200 space-y-3">
+              <div className="grid grid-cols-12 gap-3">
+                {/* キーワード検索 */}
+                <div className="col-span-12">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    キーワード（現場名・施主氏名・住所）
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="キーワードで検索..."
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* 現場作成日 */}
+                <div className="col-span-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    現場作成日
+                  </label>
+                  <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                    <input
+                      type="date"
+                      value={createdFrom}
+                      onChange={(e) => setCreatedFrom(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <span className="text-gray-500 text-sm">〜</span>
+                    <input
+                      type="date"
+                      value={createdTo}
+                      onChange={(e) => setCreatedTo(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* 現場管理担当者 */}
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    現場管理担当者
+                  </label>
+                  <select
+                    value={managerFilter}
+                    onChange={(e) => setManagerFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                  >
+                    <option value="">すべて</option>
+                    {managers.map((manager) => (
+                      <option key={manager} value={manager}>
+                        {manager}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* サブ担当者 */}
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    サブ担当者
+                  </label>
+                  <select
+                    value={subManagerFilter}
+                    onChange={(e) => setSubManagerFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                  >
+                    <option value="">すべて</option>
+                    {subManagers.map((subManager) => (
+                      <option key={subManager} value={subManager}>
+                        {subManager}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 役職 */}
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    役職
+                  </label>
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                  >
+                    <option value="">すべて</option>
+                    {roles.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 役職担当者 */}
+                <div className="col-span-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    役職担当者
+                  </label>
+                  <select
+                    value={roleManagerFilter}
+                    onChange={(e) => setRoleManagerFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                  >
+                    <option value="">すべて</option>
+                    {roleManagers.map((roleManager) => (
+                      <option key={roleManager} value={roleManager}>
+                        {roleManager}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           {isLoading ? (
             <div className="text-center py-8">

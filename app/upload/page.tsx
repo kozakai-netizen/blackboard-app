@@ -1,7 +1,7 @@
 // app/upload/page.tsx
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { FileSelector, FileSelectorRef } from '@/components/FileSelector';
@@ -240,6 +240,14 @@ function UploadPageContent() {
     setCurrentPreviewIndex(newIndex);
     setPreviewFile(files[newIndex]);
   };
+
+  // フォーム変更ハンドラをメモ化（コールバック再生成を防ぐ）
+  const handleFormChange = useCallback((info: BlackboardInfo) => {
+    setPreviewBlackboardInfo(prev => ({
+      ...prev,
+      ...info
+    }));
+  }, []);
 
   const handlePositionChange = useRef<NodeJS.Timeout | null>(null);
 
@@ -596,22 +604,16 @@ function UploadPageContent() {
                       <div className="flex-1">
                         {selectedTemplate ? (
                           <BlackboardForm
+                            key={selectedTemplate.id}
                             projectName={projectName}
                             onSubmit={handleSubmit}
-                            onFormChange={(info) => {
-                              // テンプレートのフィールドを保持しながら更新
-                              setPreviewBlackboardInfo(prev => ({
-                                ...prev,
-                                ...info
-                              }));
-                            }}
+                            onFormChange={handleFormChange}
                             disabled={isProcessing}
                             allowProjectNameEdit={true}
                             template={selectedTemplate}
                             photoCategories={photoCategories}
                             selectedCategory={selectedCategory}
                             onCategoryChange={setSelectedCategory}
-                            initialValues={previewBlackboardInfo}
                           />
                         ) : (
                           <div className="p-8 text-center text-gray-500">

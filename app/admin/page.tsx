@@ -133,6 +133,22 @@ export default function AdminPage() {
             </button>
 
             <button
+              onClick={() => window.location.href = '/admin/users'}
+              className="bg-gradient-to-r from-green-600 to-green-700 text-white py-6 px-8 rounded-xl hover:from-green-700 hover:to-green-800 transition-all shadow-lg hover:shadow-xl text-left transform hover:scale-[1.02]"
+            >
+              <div className="flex items-center gap-4">
+                <div className="text-4xl">👥</div>
+                <div className="flex-1">
+                  <div className="font-bold text-xl mb-1">ユーザー管理</div>
+                  <div className="text-sm opacity-90">
+                    ダンドリワークAPIからユーザー情報を同期
+                  </div>
+                </div>
+                <div className="text-2xl opacity-50">→</div>
+              </div>
+            </button>
+
+            <button
               onClick={() => window.location.href = '/sites'}
               className="bg-gradient-to-r from-gray-600 to-gray-700 text-white py-6 px-8 rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all shadow-lg hover:shadow-xl text-left transform hover:scale-[1.02]"
             >

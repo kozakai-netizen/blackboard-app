@@ -355,24 +355,14 @@ const renderField = (fieldId: string) => {
 
 ### 既知の問題（保留中）
 
-#### 1. チカチカ問題 ⚠️
-**現象**: 工種・天候のドロップダウン選択時にプレビューが点滅
-**原因**: templateオブジェクトやblackboardInfoの参照が変わることで再描画が発生
-**試した対策**:
-- 依存配列を最適化（`timestamp?.getTime()`, `template?.id`）
-- ドラッグ中の描画抑制
-- デバウンス処理
-
-**現状**: 完全解決には至らず、保留
-
-#### 2. テンプレート選択モーダルのプレビュー崩れ ⚠️
+#### 1. テンプレート選択モーダルのプレビュー崩れ ⚠️
 **現象**: TemplatePreviewImageの黒板レイアウトが崩れる
 **問題点**:
 - フィールド数に応じた高さ計算が不正確
 - テキストが途切れる
 - 位置がずれる
 
-**現状**: 保留
+**現状**: 保留（優先度低）
 
 ### 変更ファイル一覧
 
@@ -401,10 +391,284 @@ const renderField = (fieldId: string) => {
 - [ ] テンプレートプレビューのレイアウト修正（保留中）
 - [ ] 現場写真カテゴリ連携の動作確認
 
+### 6. パフォーマンス改善 - チカチカ問題の完全解決（✅完了）
+
+#### 問題の原因
+ドロップダウン選択時にプレビューが激しく点滅する「チカチカ」問題が発生していた。
+
+**根本原因**:
+1. `BlackboardForm.tsx`の`initialValues` useEffectが無限ループを起こしていた
+   - `initialValues`オブジェクトの参照が親コンポーネントの再レンダーごとに変わる
+   - `initialValues.timestamp !== timestamp`がDateオブジェクトの参照比較をしていた
+   - `setTimestamp()`が発火 → フォーム変更通知 → プレビュー再描画 → 無限ループ
+
+**解決策**:
+1. `initialValues` propsを完全削除
+2. テンプレートのdefaultValuesから直接state初期化
+3. `key={selectedTemplate.id}`でテンプレート切り替え時に強制リマウント
+4. useEffect依存配列を個別のプリミティブプロパティに分割
+5. Dateオブジェクトは`getTime()`で比較
+6. フォーム変更通知に50msデバウンス追加
+
+```typescript
+// BlackboardForm.tsx - 修正後
+const [workType, setWorkType] = useState((template.defaultValues?.工種 as string) || '');
+const [weather, setWeather] = useState((template.defaultValues?.天候 as string) || '');
+
+// 50msデバウンスで通知
+useEffect(() => {
+  const timeoutId = setTimeout(() => {
+    const info: BlackboardInfo = { ... };
+    onFormChange?.(info);
+  }, 50);
+  return () => clearTimeout(timeoutId);
+}, [projectName, timestamp.getTime(), workType, weather, ...]);
+
+// initialValues useEffectを最適化
+useEffect(() => {
+  if (!initialValues) return;
+  if (initialValues.workType !== undefined) setWorkType(initialValues.workType);
+  // ...
+}, [
+  initialValues?.workType,
+  initialValues?.weather,
+  // 個別プロパティを列挙
+  initialValues?.timestamp?.getTime()  // Date比較
+]);
+```
+
+```typescript
+// upload/page.tsx - 修正後
+<BlackboardForm
+  key={selectedTemplate.id}  // テンプレート変更時にリマウント
+  // initialValues削除
+  template={selectedTemplate}
+  onFormChange={handleFormChange}
+  // ...
+/>
+```
+
+#### 7. ドラッグ位置更新の修正（✅完了）
+
+**問題**: チカチカ修正後、黒板をドラッグしても位置が変わらなくなった
+
+**原因**: `template.designSettings.position`がuseEffectの依存配列に含まれていなかった
+
+**修正**:
+```typescript
+// BlackboardPreview.tsx
+useEffect(() => {
+  // ... canvas描画処理
+}, [
+  loadedImage,
+  blackboardInfo.projectName,
+  // ...
+  template?.id,
+  template?.designSettings.position.x,  // 追加
+  template?.designSettings.position.y   // 追加
+]);
+```
+
+#### 8. 詳細検索機能の復旧（✅完了）
+
+**問題**: `sites/page.tsx`の詳細検索ボタンがクリックできなくなっていた
+
+**修正**:
+- `showAdvancedSearch` state追加
+- onClick handlerでトグル
+- フィルター機能実装（キーワード、日付範囲、担当者、役割担当者など）
+- グリッドレイアウト復旧（col-span-12, col-span-6, col-span-3）
+
+#### 9. 縦写真レイアウトの自動調整（✅完了）
+
+**問題**: 縦長（ポートレート）写真で黒板レイアウトが崩れる
+
+**解決**: 項目数に応じた動的高さ計算を実装
+
+```typescript
+// BlackboardPreview.tsx
+// フィールド数から必要な高さを計算
+const baseHeight = bbWidth * 0.12; // 工事名
+const otherFields = fields.filter(f => f !== '工事名' && f !== '備考');
+const rowCount = Math.ceil(otherFields.length / 2);
+const gridItemHeight = bbWidth * 0.09;
+const remarksHeight = fields.includes('備考') && data.備考 ? bbWidth * 0.15 : 0;
+const gaps = bbWidth * 0.02 * (rowCount - 1 + (remarksHeight > 0 ? 1 : 0));
+
+const calculatedHeight =
+  bbWidth * 0.05 * 2 + // 上下余白
+  baseHeight + // 工事名
+  (rowCount > 0 ? bbWidth * 0.03 : 0) +
+  rowCount * gridItemHeight +
+  gaps +
+  remarksHeight;
+
+// designSettings.heightとcalculatedHeightの大きい方を使用
+const minHeightPercent = (calculatedHeight / canvasHeight) * 100;
+const heightPercent = Math.max(designSettings.height, minHeightPercent);
+```
+
+#### 10. 変数名の競合解決（✅完了）
+
+**問題**: ビルドエラー - 複数の変数名重複
+- `padding` (line 232, 284)
+- `otherFields` (line 228, 342)
+- `itemHeight` (line 344)
+- `remarksHeight` (line 394)
+
+**修正**:
+- `padding` → `bbPadding`（1回目の使用）
+- `otherFields`の重複宣言を削除（既存の変数を使用）
+- `itemHeight` → `gridItemHeight`（グリッド項目用）
+- `remarksHeight` → `remarksDisplayHeight`（表示用）
+
+#### 11. ユーザー管理システム実装（✅完了）
+
+現場データにmanager_id等のIDしかなく、名前が表示できない問題に対応。
+
+**実装内容**:
+
+##### データベース設計
+```sql
+-- supabase/migrations/20251009_create_users_table.sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  level TEXT,
+  permission TEXT,
+  industry TEXT,
+  company_id TEXT,
+  company_name TEXT,
+  office TEXT,
+  code TEXT,
+  last_login TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+##### API実装
+- **`/api/users/import-csv`**: CSVファイルインポート（Shift-JIS対応）
+- **`/api/sync/users`**: ダンドリワークAPIから同期（将来実装用）
+- **`/api/dandori/users`**: ダンドリワークAPIからユーザー取得（将来実装用）
+
+##### CSV Shift-JISエンコーディング対応
+```typescript
+// app/api/users/import-csv/route.ts
+import * as iconv from 'iconv-lite';
+
+const buffer = await file.arrayBuffer();
+const text = iconv.decode(Buffer.from(buffer), 'Shift_JIS');
+const lines = text.split('\n').filter(line => line.trim());
+
+// CSV解析とUPSERT
+for (let i = 1; i < lines.length; i++) {
+  const values = lines[i].split(',');
+  const userData = {
+    user_id: values[0]?.trim(),
+    name: values[1]?.trim(),
+    // ...
+  };
+  await supabase.from('users').upsert(userData, { onConflict: 'user_id' });
+}
+```
+
+##### 管理画面UI
+- **`/admin/users`**: ユーザー管理画面
+  - CSVアップロード機能
+  - ユーザー一覧表示（検索機能付き）
+  - インポート結果統計表示
+- **`/admin`**: ユーザー管理メニュー追加
+
+**同期方式**: CSV手動インポート（現在）→ AWS API自動同期（将来）
+
+### 技術的な実装詳細
+
+#### パフォーマンス最適化
+```typescript
+// 画像とキャンバスの分離で再ダウンロード防止
+const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
+
+useEffect(() => {
+  if (!imageUrl) return;
+  const img = new Image();
+  img.onload = () => setLoadedImage(img);
+  img.src = imageUrl;
+}, [imageUrl]);
+
+// useCallbackでメモ化
+const handleFormChange = useCallback((info: BlackboardInfo) => {
+  setPreviewBlackboardInfo(prev => ({ ...prev, ...info }));
+}, []);
+```
+
+### 変更ファイル一覧
+
+#### 新規作成
+- `supabase/migrations/20251009_create_users_table.sql` - ユーザーテーブル
+- `app/api/users/import-csv/route.ts` - CSV Shift-JISインポート
+- `app/api/sync/users/route.ts` - API同期（将来実装）
+- `app/api/dandori/users/route.ts` - APIフェッチ（将来実装）
+- `app/admin/users/page.tsx` - ユーザー管理UI
+
+#### 修正
+- `components/BlackboardForm.tsx` - チカチカ修正、デバウンス、依存配列最適化
+- `components/BlackboardPreview.tsx` - ドラッグ位置修正、動的高さ計算、変数名修正
+- `app/upload/page.tsx` - initialValues削除、key追加、useCallback
+- `app/sites/page.tsx` - 詳細検索復旧、担当者フィルター
+- `app/admin/page.tsx` - ユーザー管理メニュー追加
+- `package.json` - iconv-lite追加
+
+### インストールパッケージ
+```bash
+npm install iconv-lite
+```
+
+### 解決した問題
+
+#### ✅ チカチカ問題 - 完全解決
+- 無限re-render loop修正
+- 画像/キャンバス分離
+- 50msデバウンス
+- 依存配列最適化
+
+#### ✅ ドラッグ位置更新 - 完全解決
+- 依存配列にposition.x, position.y追加
+
+#### ✅ 詳細検索 - 完全解決
+- state管理復旧
+- フィルター機能実装
+
+#### ✅ 縦写真レイアウト - 完全解決
+- 動的高さ計算実装
+- Math.max()で最小高さ保証
+
+#### ✅ 変数名競合 - 完全解決
+- すべての重複変数を適切にリネーム
+
+#### ✅ ユーザー管理 - 完全実装
+- CSV Shift-JISインポート成功
+- 58ユーザー登録確認
+- 検索・一覧表示機能完成
+
+### Git履歴
+
+#### Commit 9239506（2025-10-09）
+"feat: Day 9完了 - パフォーマンス改善とユーザー管理実装"
+- チカチカ問題完全解決（無限re-render修正）
+- ドラッグ位置更新修正
+- 詳細検索復旧
+- 縦写真レイアウト自動調整
+- ユーザー管理システム実装（CSV Shift-JISインポート）
+
 ### 最終更新
 - 日時: 2025-10-09
-- 状態: Day 9進行中 - テンプレート駆動黒板システム完成、ドラッグ機能実装完了
-- 次回タスク: 個別設定モードのテンプレート対応
+- 状態: Day 9完了 - チカチカ問題解決、ドラッグ修正、ユーザー管理実装完了
+- コミット: 9239506
+- 次回タスク: 黒板付き写真のアップロード機能実装
 
 ---
 
