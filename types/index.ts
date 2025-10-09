@@ -1,10 +1,23 @@
 // types/index.ts
+/**
+ * 黒板情報（完全テンプレート駆動版）
+ * すべての項目はテンプレートで定義される
+ */
 export interface BlackboardInfo {
+  // 基本情報
   projectName: string;
-  workType: string;
-  weather: string;
-  workContent?: string;
   timestamp: Date;
+
+  // テンプレートで定義される項目（すべてオプショナル）
+  workType?: string;      // 工種
+  weather?: string;       // 天候
+  workCategory?: string;  // 種別
+  workDetail?: string;    // 細別
+  contractor?: string;    // 施工者
+  location?: string;      // 撮影場所
+  station?: string;       // 測点位置
+  witness?: string;       // 立会者
+  remarks?: string;       // 備考
 }
 
 export interface ProcessedImage {
@@ -101,10 +114,11 @@ export interface BlackboardDesignSettings {
 export interface BlackboardData {
   工事名: string;
   工種?: string;
+  天候?: string;
   種別?: string;
   細別?: string;
   撮影日: string;
-  施工者: string;
+  施工者?: string;
   撮影場所?: string;
   測点位置?: string;
   立会者?: string;

@@ -10,10 +10,11 @@ import DraggableBlackboard from '@/components/DraggableBlackboard'
 const AVAILABLE_FIELDS = [
   { id: '工事名', label: '工事名', required: true },
   { id: '工種', label: '工種', required: false },
+  { id: '天候', label: '天候', required: false },
   { id: '種別', label: '種別', required: false },
   { id: '細別', label: '細別', required: false },
   { id: '撮影日', label: '撮影日', required: true },
-  { id: '施工者', label: '施工者', required: true },
+  { id: '施工者', label: '施工者', required: false },
   { id: '撮影場所', label: '撮影場所', required: false },
   { id: '測点位置', label: '測点・位置', required: false },
   { id: '立会者', label: '立会者', required: false },

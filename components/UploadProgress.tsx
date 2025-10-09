@@ -1,17 +1,32 @@
 // components/UploadProgress.tsx
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { UploadProgress } from '@/types';
 
 interface UploadProgressProps {
   progress: UploadProgress;
+  onClose?: () => void;
 }
 
-export function UploadProgressToast({ progress }: UploadProgressProps) {
-  if (progress.total === 0) return null;
+export function UploadProgressToast({ progress, onClose }: UploadProgressProps) {
+  const [visible, setVisible] = useState(true);
 
-  const percentage = Math.floor((progress.completed / progress.total) * 100);
-  const isComplete = progress.completed === progress.total;
+  const percentage = progress.total > 0 ? Math.floor((progress.completed / progress.total) * 100) : 0;
+  const isComplete = progress.total > 0 && progress.completed === progress.total;
+
+  // 完了したら3秒後に自動で閉じる
+  useEffect(() => {
+    if (isComplete) {
+      const timer = setTimeout(() => {
+        setVisible(false);
+        onClose?.();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isComplete, onClose]);
+
+  if (progress.total === 0 || !visible) return null;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600 text-white p-3 shadow-lg">

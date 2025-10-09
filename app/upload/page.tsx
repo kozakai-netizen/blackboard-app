@@ -15,7 +15,8 @@ import { UploadProgressToast, UploadProgressModal } from '@/components/UploadPro
 import { processImages, processImage } from '@/lib/canvas';
 import { uploadPhotosInChunks } from '@/lib/dandori-api';
 import { saveManifest } from '@/lib/supabase';
-import { getAllTemplates, getDefaultTemplate } from '@/lib/templates';
+import { getAllTemplates, getDefaultTemplate, updateTemplate } from '@/lib/templates';
+import { TemplateSelector } from '@/components/TemplateSelector';
 import type { BlackboardInfo, UploadProgress, Manifest, Template } from '@/types';
 
 function UploadPageContent() {
@@ -32,6 +33,10 @@ function UploadPageContent() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
 
+  // 現場写真カテゴリ
+  const [photoCategories, setPhotoCategories] = useState<{ id: number; name: string }[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+
   const [files, setFiles] = useState<File[]>([]);
   const [projectName, setProjectName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,9 +49,6 @@ function UploadPageContent() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [previewBlackboardInfo, setPreviewBlackboardInfo] = useState<BlackboardInfo>({
     projectName: '',
-    workType: '基礎工事',
-    weather: '晴れ',
-    workContent: '',
     timestamp: new Date()
   });
   const [mode, setMode] = useState<'selection' | 'batch' | 'individual'>('selection');
@@ -80,21 +82,53 @@ function UploadPageContent() {
   // テンプレート選択時にデフォルト値を適用
   useEffect(() => {
     if (selectedTemplate) {
+      console.log('📝 Template selected:', selectedTemplate.name, selectedTemplate);
       const defaultValues = selectedTemplate.defaultValues;
-      setPreviewBlackboardInfo(prev => ({
-        ...prev,
-        projectName: projectName || prev.projectName,
-        workType: (defaultValues.工種 as string) || prev.workType,
-        workCategory: (defaultValues.種別 as string) || prev.workCategory,
-        workDetail: (defaultValues.細別 as string) || prev.workDetail,
-        contractor: (defaultValues.施工者 as string) || prev.contractor,
-        location: (defaultValues.撮影場所 as string) || prev.location,
-        station: (defaultValues.測点位置 as string) || prev.station,
-        witness: (defaultValues.立会者 as string) || prev.witness,
-        remarks: (defaultValues.備考 as string) || prev.remarks,
-      }));
+      setPreviewBlackboardInfo(prev => {
+        const newInfo: BlackboardInfo = {
+          ...prev,
+          projectName: projectName || prev.projectName,
+          workType: (defaultValues.工種 as string) || undefined,
+          weather: (defaultValues.天候 as string) || undefined,
+          workCategory: (defaultValues.種別 as string) || undefined,
+          workDetail: (defaultValues.細別 as string) || undefined,
+          contractor: (defaultValues.施工者 as string) || undefined,
+          location: (defaultValues.撮影場所 as string) || undefined,
+          station: (defaultValues.測点位置 as string) || undefined,
+          witness: (defaultValues.立会者 as string) || undefined,
+          remarks: (defaultValues.備考 as string) || undefined,
+        };
+        console.log('📝 Updated blackboardInfo:', newInfo);
+        return newInfo;
+      });
     }
   }, [selectedTemplate, projectName]);
+
+  // 現場写真カテゴリを取得
+  useEffect(() => {
+    const fetchPhotoCategories = async () => {
+      if (!placeCode || !siteCode) return;
+
+      try {
+        const response = await fetch(`/api/dandori/photo-categories?place_code=${placeCode}&site_code=${siteCode}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.result && data.data) {
+            setPhotoCategories(data.data);
+            // デフォルトで「電子小黒板」カテゴリを選択
+            const defaultCat = data.data.find((cat: any) => cat.name === '電子小黒板');
+            if (defaultCat) {
+              setSelectedCategory(defaultCat.name);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to fetch photo categories:', error);
+      }
+    };
+
+    fetchPhotoCategories();
+  }, [placeCode, siteCode]);
 
   // APIから現場情報を取得
   useEffect(() => {
@@ -207,6 +241,38 @@ function UploadPageContent() {
     setPreviewFile(files[newIndex]);
   };
 
+  const handlePositionChange = useRef<NodeJS.Timeout | null>(null);
+
+  const onPositionChange = (position: { x: number; y: number }) => {
+    if (!selectedTemplate) return;
+
+    // Update template position immediately for preview
+    const updatedTemplate = {
+      ...selectedTemplate,
+      designSettings: {
+        ...selectedTemplate.designSettings,
+        position
+      }
+    };
+    setSelectedTemplate(updatedTemplate);
+
+    // Debounce database save (only save after 500ms of no movement)
+    if (handlePositionChange.current) {
+      clearTimeout(handlePositionChange.current);
+    }
+
+    handlePositionChange.current = setTimeout(async () => {
+      try {
+        await updateTemplate(selectedTemplate.id, {
+          designSettings: updatedTemplate.designSettings
+        });
+        console.log('✅ Template position saved:', position);
+      } catch (error) {
+        console.error('❌ Failed to save template position:', error);
+      }
+    }, 500);
+  };
+
   const handleIndividualSubmit = async (assignments: Map<number, BlackboardInfo>) => {
     setIsProcessing(true);
     setShowModal(true);
@@ -219,7 +285,7 @@ function UploadPageContent() {
       // 設定済みの写真のみ処理
       for (const [index, info] of assignments.entries()) {
         const file = files[index];
-        const processed = await processImage(file, info, jobId);
+        const processed = await processImage(file, info, jobId, selectedTemplate || undefined);
         processedList.push(processed);
         setProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
       }
@@ -233,7 +299,7 @@ function UploadPageContent() {
       await uploadPhotosInChunks(
         placeCode,
         siteCode,
-        '施工中',
+        selectedCategory || '電子小黒板',
         '100033',
         uploadFiles,
         (completed) => {
@@ -246,7 +312,7 @@ function UploadPageContent() {
         jobId,
         placeCode,
         siteCode,
-        categoryName: '施工中',
+        categoryName: selectedCategory || '電子小黒板',
         templateVersion: 'v1.0',
         createdAtClient: new Date().toISOString(),
         hashAlgorithm: 'SHA-256',
@@ -308,7 +374,8 @@ function UploadPageContent() {
             ...prev,
             current: files[current - 1]?.name
           }));
-        }
+        },
+        selectedTemplate || undefined
       );
 
       const uploadFiles = processed.map(p => ({
@@ -319,7 +386,7 @@ function UploadPageContent() {
       await uploadPhotosInChunks(
         placeCode,
         siteCode,
-        '施工中',
+        selectedCategory || '電子小黒板',
         '100033',
         uploadFiles,
         (completed) => {
@@ -331,7 +398,7 @@ function UploadPageContent() {
         jobId,
         placeCode,
         siteCode,
-        categoryName: '施工中',
+        categoryName: selectedCategory || '電子小黒板',
         templateVersion: 'v1.0',
         createdAtClient: new Date().toISOString(),
         hashAlgorithm: 'SHA-256',
@@ -407,15 +474,15 @@ function UploadPageContent() {
           {files.length > 0 && !isProcessing && (
             <div className="pt-4 border-t space-y-6">
               {/* テンプレート選択 */}
-              <div className="bg-white rounded-lg border p-6">
-                <h2 className="text-lg font-semibold mb-4">📝 黒板テンプレート選択</h2>
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">📝 黒板テンプレート</h3>
                 {isLoadingTemplates ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-8 bg-white rounded-lg border">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
                     <p className="text-gray-600 text-sm">読み込み中...</p>
                   </div>
                 ) : templates.length === 0 ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-8 bg-white rounded-lg border">
                     <p className="text-gray-600 mb-4">テンプレートが登録されていません</p>
                     <button
                       onClick={() => window.open('/admin/templates/new', '_blank')}
@@ -425,39 +492,11 @@ function UploadPageContent() {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {templates.map((template) => (
-                      <button
-                        key={template.id}
-                        onClick={() => setSelectedTemplate(template)}
-                        className={`p-4 border-2 rounded-lg transition-all text-left ${
-                          selectedTemplate?.id === template.id
-                            ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-bold text-sm">{template.name}</h3>
-                          {template.isDefault && (
-                            <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">
-                              デフォルト
-                            </span>
-                          )}
-                          {selectedTemplate?.id === template.id && (
-                            <span className="text-blue-600">✓</span>
-                          )}
-                        </div>
-                        {template.description && (
-                          <p className="text-xs text-gray-600 mb-2 line-clamp-2">
-                            {template.description}
-                          </p>
-                        )}
-                        <div className="text-xs text-gray-500">
-                          {template.fields.length}個の項目
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  <TemplateSelector
+                    templates={templates}
+                    selectedTemplate={selectedTemplate}
+                    onSelectTemplate={setSelectedTemplate}
+                  />
                 )}
               </div>
 
@@ -477,7 +516,9 @@ function UploadPageContent() {
                       <BlackboardPreview
                         imageFile={previewFile}
                         blackboardInfo={previewBlackboardInfo}
+                        template={selectedTemplate || undefined}
                         onPreviewClick={() => setShowPreviewModal(true)}
+                        onPositionChange={onPositionChange}
                       />
 
                       {/* サムネイルスライダー */}
@@ -548,17 +589,36 @@ function UploadPageContent() {
                     </div>
 
                     {/* 右側: 黒板情報入力（1カラム分） */}
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 flex flex-col">
                       <h2 className="text-lg font-semibold text-gray-800 mb-4">
                         黒板情報を入力（全{files.length}枚に適用）
                       </h2>
-                      <BlackboardForm
-                        projectName={projectName}
-                        onSubmit={handleSubmit}
-                        onFormChange={(info) => setPreviewBlackboardInfo(info)}
-                        disabled={isProcessing}
-                        allowProjectNameEdit={true}
-                      />
+                      <div className="flex-1">
+                        {selectedTemplate ? (
+                          <BlackboardForm
+                            projectName={projectName}
+                            onSubmit={handleSubmit}
+                            onFormChange={(info) => {
+                              // テンプレートのフィールドを保持しながら更新
+                              setPreviewBlackboardInfo(prev => ({
+                                ...prev,
+                                ...info
+                              }));
+                            }}
+                            disabled={isProcessing}
+                            allowProjectNameEdit={true}
+                            template={selectedTemplate}
+                            photoCategories={photoCategories}
+                            selectedCategory={selectedCategory}
+                            onCategoryChange={setSelectedCategory}
+                            initialValues={previewBlackboardInfo}
+                          />
+                        ) : (
+                          <div className="p-8 text-center text-gray-500">
+                            テンプレートを選択してください
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -601,6 +661,7 @@ function UploadPageContent() {
         <PreviewModal
           imageFile={previewFile}
           blackboardInfo={previewBlackboardInfo}
+          template={selectedTemplate || undefined}
           onClose={() => setShowPreviewModal(false)}
         />
       )}

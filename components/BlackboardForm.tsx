@@ -1,8 +1,8 @@
 // components/BlackboardForm.tsx
 'use client';
 
-import { useState } from 'react';
-import type { BlackboardInfo } from '@/types';
+import { useState, useEffect } from 'react';
+import type { BlackboardInfo, Template } from '@/types';
 
 interface BlackboardFormProps {
   projectName: string;
@@ -11,6 +11,11 @@ interface BlackboardFormProps {
   disabled?: boolean;
   hideSubmitButton?: boolean;
   allowProjectNameEdit?: boolean;
+  template: Template; // 必須に変更
+  photoCategories?: { id: number; name: string }[];
+  selectedCategory?: string;
+  onCategoryChange?: (category: string) => void;
+  initialValues?: BlackboardInfo;
 }
 
 const WORK_TYPES = [
@@ -28,14 +33,108 @@ const WORK_TYPES = [
 
 const WEATHER_OPTIONS = ['晴れ', '曇り', '雨', '雪'];
 
-export function BlackboardForm({ projectName: initialProjectName, onSubmit, onFormChange, disabled = false, hideSubmitButton = false, allowProjectNameEdit = false }: BlackboardFormProps) {
+export function BlackboardForm({
+  projectName: initialProjectName,
+  onSubmit,
+  onFormChange,
+  disabled = false,
+  hideSubmitButton = false,
+  allowProjectNameEdit = false,
+  template,
+  photoCategories = [],
+  selectedCategory = '',
+  onCategoryChange,
+  initialValues
+}: BlackboardFormProps) {
   const [projectName, setProjectName] = useState(allowProjectNameEdit ? '' : initialProjectName);
-  const [workType, setWorkType] = useState('');
-  const [weather, setWeather] = useState('');
-  const [workContent, setWorkContent] = useState('');
   const [timestamp, setTimestamp] = useState(new Date());
 
-  // datetime-local形式の文字列に変換（YYYY-MM-DDThh:mm）
+  // テンプレートの全項目用のstate
+  const [workType, setWorkType] = useState('');
+  const [weather, setWeather] = useState('');
+  const [workCategory, setWorkCategory] = useState('');
+  const [workDetail, setWorkDetail] = useState('');
+  const [contractor, setContractor] = useState('');
+  const [location, setLocation] = useState('');
+  const [station, setStation] = useState('');
+  const [witness, setWitness] = useState('');
+  const [remarks, setRemarks] = useState('');
+
+  // initialValuesが変更されたら、ローカルstateを更新
+  useEffect(() => {
+    if (!initialValues) return;
+
+    if (initialValues.workType !== undefined && initialValues.workType !== workType) {
+      setWorkType(initialValues.workType);
+    }
+    if (initialValues.weather !== undefined && initialValues.weather !== weather) {
+      setWeather(initialValues.weather);
+    }
+    if (initialValues.workCategory !== undefined && initialValues.workCategory !== workCategory) {
+      setWorkCategory(initialValues.workCategory);
+    }
+    if (initialValues.workDetail !== undefined && initialValues.workDetail !== workDetail) {
+      setWorkDetail(initialValues.workDetail);
+    }
+    if (initialValues.contractor !== undefined && initialValues.contractor !== contractor) {
+      setContractor(initialValues.contractor);
+    }
+    if (initialValues.location !== undefined && initialValues.location !== location) {
+      setLocation(initialValues.location);
+    }
+    if (initialValues.station !== undefined && initialValues.station !== station) {
+      setStation(initialValues.station);
+    }
+    if (initialValues.witness !== undefined && initialValues.witness !== witness) {
+      setWitness(initialValues.witness);
+    }
+    if (initialValues.remarks !== undefined && initialValues.remarks !== remarks) {
+      setRemarks(initialValues.remarks);
+    }
+    if (initialValues.timestamp && initialValues.timestamp !== timestamp) {
+      setTimestamp(initialValues.timestamp);
+    }
+  }, [initialValues]);
+
+  // フォーム変更時の通知
+  useEffect(() => {
+    const info: BlackboardInfo = {
+      projectName,
+      timestamp,
+      workType: workType || undefined,
+      weather: weather || undefined,
+      workCategory: workCategory || undefined,
+      workDetail: workDetail || undefined,
+      contractor: contractor || undefined,
+      location: location || undefined,
+      station: station || undefined,
+      witness: witness || undefined,
+      remarks: remarks || undefined,
+    };
+    onFormChange?.(info);
+  }, [projectName, timestamp.getTime(), workType, weather, workCategory, workDetail, contractor, location, station, witness, remarks, onFormChange]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const info: BlackboardInfo = {
+      projectName,
+      timestamp,
+      workType: workType || undefined,
+      weather: weather || undefined,
+      workCategory: workCategory || undefined,
+      workDetail: workDetail || undefined,
+      contractor: contractor || undefined,
+      location: location || undefined,
+      station: station || undefined,
+      witness: witness || undefined,
+      remarks: remarks || undefined,
+    };
+
+    onSubmit(info);
+  };
+
+  // datetime-local形式の文字列に変換
   const formatDateTimeLocal = (date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -45,22 +144,175 @@ export function BlackboardForm({ projectName: initialProjectName, onSubmit, onFo
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // テンプレートのfieldsに基づいてフィールドを動的レンダリング
+  const renderField = (fieldId: string) => {
+    // 工事名は常に最初に表示（別処理）
+    if (fieldId === '工事名') return null;
+    // 撮影日も別処理
+    if (fieldId === '撮影日') return null;
 
-    const info: BlackboardInfo = {
-      projectName,
-      workType,
-      weather,
-      workContent: workContent.trim() || undefined,
-      timestamp
-    };
+    const isRequired = false; // すべてオプショナル
 
-    onSubmit(info);
+    switch (fieldId) {
+      case '工種':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              工種 {isRequired && <span className="text-red-500">*</span>}
+            </label>
+            <select
+              value={workType}
+              onChange={e => setWorkType(e.target.value)}
+              disabled={disabled}
+              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
+                         disabled:bg-gray-100 text-base ${!workType ? 'text-gray-400' : 'text-gray-900'}`}
+              required={isRequired}
+            >
+              <option value="" className="text-gray-400">工種を選択</option>
+              {WORK_TYPES.map(type => (
+                <option key={type} value={type} className="text-gray-900">{type}</option>
+              ))}
+            </select>
+          </div>
+        );
+
+      case '天候':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              天候 {isRequired && <span className="text-red-500">*</span>}
+            </label>
+            <select
+              value={weather}
+              onChange={e => setWeather(e.target.value)}
+              disabled={disabled}
+              className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
+                         disabled:bg-gray-100 text-base ${!weather ? 'text-gray-400' : 'text-gray-900'}`}
+              required={isRequired}
+            >
+              <option value="" className="text-gray-400">天候を選択</option>
+              {WEATHER_OPTIONS.map(w => (
+                <option key={w} value={w} className="text-gray-900">{w}</option>
+              ))}
+            </select>
+          </div>
+        );
+
+      case '種別':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">種別</label>
+            <input
+              type="text"
+              value={workCategory}
+              onChange={e => setWorkCategory(e.target.value)}
+              disabled={disabled}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-base"
+              placeholder="種別を入力"
+            />
+          </div>
+        );
+
+      case '細別':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">細別</label>
+            <input
+              type="text"
+              value={workDetail}
+              onChange={e => setWorkDetail(e.target.value)}
+              disabled={disabled}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-base"
+              placeholder="細別を入力"
+            />
+          </div>
+        );
+
+      case '施工者':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">施工者</label>
+            <input
+              type="text"
+              value={contractor}
+              onChange={e => setContractor(e.target.value)}
+              disabled={disabled}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-base"
+              placeholder="施工者を入力"
+            />
+          </div>
+        );
+
+      case '撮影場所':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">撮影場所</label>
+            <input
+              type="text"
+              value={location}
+              onChange={e => setLocation(e.target.value)}
+              disabled={disabled}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-base"
+              placeholder="撮影場所を入力"
+            />
+          </div>
+        );
+
+      case '測点位置':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">測点位置</label>
+            <input
+              type="text"
+              value={station}
+              onChange={e => setStation(e.target.value)}
+              disabled={disabled}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-base"
+              placeholder="測点位置を入力"
+            />
+          </div>
+        );
+
+      case '立会者':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">立会者</label>
+            <input
+              type="text"
+              value={witness}
+              onChange={e => setWitness(e.target.value)}
+              disabled={disabled}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-base"
+              placeholder="立会者を入力"
+            />
+          </div>
+        );
+
+      case '備考':
+        return (
+          <div key={fieldId}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
+            <textarea
+              value={remarks}
+              onChange={e => setRemarks(e.target.value)}
+              disabled={disabled}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 text-base resize-none"
+              rows={3}
+              placeholder="備考を入力"
+            />
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="flex flex-col h-full">
+      {/* 上部: 入力項目エリア */}
+      <div className="space-y-4 flex-1">
+      {/* 固定項目（全幅） */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           工事名 {allowProjectNameEdit && <span className="text-xs text-gray-500">(任意)</span>}
@@ -69,17 +321,7 @@ export function BlackboardForm({ projectName: initialProjectName, onSubmit, onFo
           <input
             type="text"
             value={projectName}
-            onChange={e => {
-              const newProjectName = e.target.value;
-              setProjectName(newProjectName);
-              onFormChange?.({
-                projectName: newProjectName,
-                workType,
-                weather,
-                workContent: workContent.trim() || undefined,
-                timestamp
-              });
-            }}
+            onChange={e => setProjectName(e.target.value)}
             disabled={disabled}
             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
                        disabled:bg-gray-100 text-base"
@@ -99,17 +341,7 @@ export function BlackboardForm({ projectName: initialProjectName, onSubmit, onFo
         <input
           type="datetime-local"
           value={formatDateTimeLocal(timestamp)}
-          onChange={e => {
-            const newTimestamp = new Date(e.target.value);
-            setTimestamp(newTimestamp);
-            onFormChange?.({
-              projectName,
-              workType,
-              weather,
-              workContent: workContent.trim() || undefined,
-              timestamp: newTimestamp
-            });
-          }}
+          onChange={e => setTimestamp(new Date(e.target.value))}
           disabled={disabled}
           className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
                      disabled:bg-gray-100 text-base"
@@ -117,99 +349,52 @@ export function BlackboardForm({ projectName: initialProjectName, onSubmit, onFo
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          工種 <span className="text-red-500">*</span>
-        </label>
-        <select
-          value={workType}
-          onChange={e => {
-            const newWorkType = e.target.value;
-            setWorkType(newWorkType);
-            onFormChange?.({
-              projectName,
-              workType: newWorkType,
-              weather,
-              workContent: workContent.trim() || undefined,
-              timestamp
-            });
-          }}
-          disabled={disabled}
-          className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
-                     disabled:bg-gray-100 text-base ${!workType ? 'text-gray-400' : 'text-gray-900'}`}
-          required
-        >
-          <option value="" className="text-gray-400">工種を選択</option>
-          {WORK_TYPES.map(type => (
-            <option key={type} value={type} className="text-gray-900">{type}</option>
-          ))}
-        </select>
+      {/* 現場写真カテゴリ選択 */}
+      {photoCategories.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            現場写真カテゴリ <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={selectedCategory}
+            onChange={e => onCategoryChange?.(e.target.value)}
+            disabled={disabled}
+            className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
+                       disabled:bg-gray-100 text-base ${!selectedCategory ? 'text-gray-400' : 'text-gray-900'}`}
+            required
+          >
+            <option value="" className="text-gray-400">カテゴリを選択</option>
+            {photoCategories.map(cat => (
+              <option key={cat.id} value={cat.name} className="text-gray-900">{cat.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* テンプレート項目（備考以外は2カラムグリッド） */}
+      <div className="grid grid-cols-2 gap-4">
+        {template.fields
+          .filter(f => f !== '工事名' && f !== '撮影日' && f !== '備考')
+          .map(fieldId => renderField(fieldId))}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          天候 <span className="text-red-500">*</span>
-        </label>
-        <select
-          value={weather}
-          onChange={e => {
-            const newWeather = e.target.value;
-            setWeather(newWeather);
-            onFormChange?.({
-              projectName,
-              workType,
-              weather: newWeather,
-              workContent: workContent.trim() || undefined,
-              timestamp
-            });
-          }}
-          disabled={disabled}
-          className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
-                     disabled:bg-gray-100 text-base ${!weather ? 'text-gray-400' : 'text-gray-900'}`}
-          required
-        >
-          <option value="" className="text-gray-400">天候を選択</option>
-          {WEATHER_OPTIONS.map(w => (
-            <option key={w} value={w} className="text-gray-900">{w}</option>
-          ))}
-        </select>
+        {/* 備考は全幅 */}
+        {template.fields.includes('備考') && renderField('備考')}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          作業内容（任意）
-        </label>
-        <textarea
-          value={workContent}
-          onChange={e => {
-            const newWorkContent = e.target.value;
-            setWorkContent(newWorkContent);
-            onFormChange?.({
-              projectName,
-              workType,
-              weather,
-              workContent: newWorkContent.trim() || undefined,
-              timestamp
-            });
-          }}
-          disabled={disabled}
-          placeholder="配筋検査、型枠組立など"
-          className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500
-                     disabled:bg-gray-100 text-base resize-none"
-          rows={3}
-        />
-      </div>
-
+      {/* 下部: 登録ボタン */}
       {!hideSubmitButton && (
-        <button
-          type="submit"
-          disabled={disabled}
-          className="w-full py-4 px-6 bg-green-600 text-white rounded-lg
-                     hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed
-                     font-bold text-lg transition-colors"
-        >
-          登録する
-        </button>
+        <div className="mt-4 pt-4 border-t">
+          <button
+            type="submit"
+            disabled={disabled}
+            className="w-full py-4 px-6 bg-green-600 text-white rounded-lg
+                       hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed
+                       font-bold text-lg transition-colors"
+          >
+            登録する
+          </button>
+        </div>
       )}
     </form>
   );
