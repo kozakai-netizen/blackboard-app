@@ -20,7 +20,7 @@ interface SiteTableProps {
   placeCode: string;
 }
 
-type SortKey = 'site_name' | 'updated_at';
+type SortKey = 'site_name' | 'updated_at' | 'site_type' | 'status' | 'address' | 'manager_name';
 type SortOrder = 'asc' | 'desc';
 
 export function SiteTable({ sites, placeCode }: SiteTableProps) {
@@ -139,27 +139,47 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
               <tr className="border-b-2 border-gray-200">
                 <th
                   onClick={() => handleSort('site_name')}
-                  className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors"
+                  className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     現場名 <SortIcon columnKey="site_name" />
                   </div>
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden md:table-cell">
-                  種類
+                <th
+                  onClick={() => handleSort('site_type')}
+                  className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors hidden md:table-cell"
+                >
+                  <div className="flex items-center gap-2">
+                    種類 <SortIcon columnKey="site_type" />
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  ステータス
+                <th
+                  onClick={() => handleSort('status')}
+                  className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    ステータス <SortIcon columnKey="status" />
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden xl:table-cell">
-                  住所
+                <th
+                  onClick={() => handleSort('address')}
+                  className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors hidden xl:table-cell"
+                >
+                  <div className="flex items-center gap-2">
+                    住所 <SortIcon columnKey="address" />
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider hidden lg:table-cell">
-                  管理担当者
+                <th
+                  onClick={() => handleSort('manager_name')}
+                  className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors hidden lg:table-cell"
+                >
+                  <div className="flex items-center gap-2">
+                    管理担当者 <SortIcon columnKey="manager_name" />
+                  </div>
                 </th>
                 <th
                   onClick={() => handleSort('updated_at')}
-                  className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors hidden sm:table-cell"
+                  className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors hidden sm:table-cell"
                 >
                   <div className="flex items-center gap-2">
                     更新日 <SortIcon columnKey="updated_at" />
@@ -175,16 +195,16 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                   className="hover:bg-blue-50 hover:shadow-md transition-all cursor-pointer group"
                 >
                   <td className="px-6 py-5">
-                    <div className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                    <div className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
                       {site.site_name}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="text-sm text-gray-500 mt-1">
                       {site.site_code}
                     </div>
                   </td>
-                  <td className="px-6 py-5 text-sm text-gray-600 hidden md:table-cell">
+                  <td className="px-6 py-5 text-base text-gray-600 hidden md:table-cell">
                     {site.site_type ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
                         {site.site_type}
                       </span>
                     ) : (
@@ -193,20 +213,20 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                   </td>
                   <td className="px-6 py-5">
                     {site.status ? (
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(site.status)}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeColor(site.status)}`}>
                         {site.status}
                       </span>
                     ) : (
                       '-'
                     )}
                   </td>
-                  <td className="px-6 py-5 text-sm text-gray-600 hidden xl:table-cell">
+                  <td className="px-6 py-5 text-base text-gray-600 hidden xl:table-cell">
                     <div className="flex items-center gap-1">
                       <span>📍</span>
                       <span className="line-clamp-1">{site.address || '-'}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-5 text-sm text-gray-600 hidden lg:table-cell">
+                  <td className="px-6 py-5 text-base text-gray-600 hidden lg:table-cell">
                     {site.manager_name ? (
                       <div className="flex items-center gap-1">
                         <span>👤</span>
@@ -216,7 +236,7 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                       '-'
                     )}
                   </td>
-                  <td className="px-6 py-5 text-sm text-gray-500 hidden sm:table-cell">
+                  <td className="px-6 py-5 text-base text-gray-500 hidden sm:table-cell">
                     {site.updated_at
                       ? new Date(site.updated_at).toLocaleDateString('ja-JP')
                       : '-'}

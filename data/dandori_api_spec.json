@@ -1,0 +1,3668 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "description": "ダンドリワーク連携用 API仕様\n\n| Version | Date | Notes |\n|---------|------|-------|\n| 1.5.0 | 2025/09/10   | 「現場一覧の取得」「現場情報登録・更新」<br>現場住所の分割登録・更新に対応 |\n| 1.4.0 | 2025/09/10   | 「現場資料情報の取得」<br>取得する資料のカテゴリ指定に対応 |\n| 1.3.0 | 2025/06/04   | 「現場写真情報取得」<br>取得する写真のカテゴリ指定に対応 |\n| 1.2.0 | 2025/05/21   | 「現場一覧の取得」「現場情報登録・更新」<br>プルダウンタイプのオリジナル項目の取得・更新に対応 |\n| 1.1.0 | 2024/08/21   | 「現場一覧の取得」APIのレスポンス項目追加：施主情報 |\n| 1.0.0 | 2022/03/15   | 新規作成 |\n\n# Authentication\n\n<!-- ReDoc-Inject: <security-definitions> -->",
+    "version": "1.5.0",
+    "title": "ダンドリワーク連携用 API仕様",
+    "termsOfService": "https://www.dandoli-works.com/api_terms/"
+  },
+  "paths": {
+    "/co/places/{place_code}/sites": {
+      "get": {
+        "tags": [
+          "現場一覧の取得"
+        ],
+        "summary": "現場一覧の取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 45
+            }
+          },
+          {
+            "name": "site_status",
+            "in": "query",
+            "description": "現場ステータスID\n1：追客中 ／ 2：契約中 ／ 3：着工中 ／ 4：完工 ／ 5：中止 ／ 6：他決\nカンマ区切りで複数指定可",
+            "schema": {
+              "type": "string",
+              "maxLength": 1
+            },
+            "style": "form"
+          },
+          {
+            "name": "site_type",
+            "in": "query",
+            "description": "現場種類コード\nプレイス設定-現場種類-取得API で取得できる現場種類コードを指定可能\nカンマ区切りで複数指定可",
+            "schema": {
+              "type": "string",
+              "maxLength": 10
+            },
+            "style": "form"
+          },
+          {
+            "name": "site_code",
+            "in": "query",
+            "description": "現場コード　連携元で登録したコードを設定",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "create_date_from",
+            "in": "query",
+            "description": "現場作成日 FROM yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "create_date_to",
+            "in": "query",
+            "description": "現場作成日 TO yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "update_date_from",
+            "in": "query",
+            "description": "現場更新日 FROM yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "update_date_to",
+            "in": "query",
+            "description": "現場更新日 TO yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteListInfo"
+                      },
+                      "description": "登録失敗時は、空オブジェクトになります"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "現場情報登録・更新（契約番号指定）"
+        ],
+        "summary": "現場情報・更新（契約番号指定）",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contract_num",
+            "in": "query",
+            "description": "契約番号\n連携元で登録したコードを設定、ダンドリワーク側の「契約番号」と合致すれば更新する。合致しなければ新規登録する。",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteInfo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ResponseSiteInfo"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "以下のいずれかを返却する。\n新規追加しました：登録成功（新規追加時）\n更新しました：登録成功（更新時）\n保存に失敗しました：登録失敗"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる",
+                      "example": {
+                        "site_type": "現場種類が不正です"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/{site_code}": {
+      "put": {
+        "tags": [
+          "現場情報登録・更新（現場コード指定）"
+        ],
+        "summary": "現場情報・更新（現場コード指定）",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "description": "現場コード\n連携元で登録したコードを設定、ダンドリワーク側の「現場コード」と合致すれば更新する。合致しなければ新規登録する。",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteInfo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ResponseSiteInfo",
+                      "description": "処理後の最新情報\n（【リクエスト項目】現場名以下全て + ダンドリワークの現場詳細URL\nJSON形式は【リクエスト項目】と同じ。\n（登録失敗時は、空オブジェクトになる）"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "以下のいずれかを返却する。\n新規追加しました：登録成功（新規追加時）\n更新しました：登録成功（更新時）\n保存に失敗しました：登録失敗"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "description": "以下のいずれかを返却する。\n新規追加しました：登録成功（新規追加時）\n更新しました：登録成功（更新時）\n保存に失敗しました：登録失敗\nエラー発生時にキー毎のエラー情報がセットされる"
+                        }
+                      },
+                      "example": {
+                        "site_type": "現場種類が不正です"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/{site_code}/documents": {
+      "get": {
+        "tags": [
+          "現場資料情報の取得"
+        ],
+        "summary": "現場資料情報の取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 45
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "required": true,
+            "description": "現場コード　取得する現場を特定するコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "create_date_from",
+            "in": "query",
+            "description": "投稿日（期間指定開始日） FROM yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "create_date_to",
+            "in": "query",
+            "description": "投稿日（期間指定終了日） TO yyyy-mm-dd",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "category_name",
+            "in": "query",
+            "description": "現場資料のカテゴリ  \n現場の種類に対応するカテゴリ名を完全一致で指定する。（URLエンコード必須）\n\n＜使用例＞  \n単一カテゴリ指定（string）  \n&nbsp;&nbsp;`category_name=各種図面`\n\n複数カテゴリ指定（Array of string）  \n&nbsp;&nbsp;`category_name[]=各種図面&category_name[]=工程表&category_name[]=議事録`",
+            "schema": {
+              "type": "string or Array of string"
+            },
+            "explode": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "properties": {
+                          "file_name": {
+                            "type": "string",
+                            "description": "ファイル名",
+                            "example": "test_site_photo.png"
+                          },
+                          "file_url": {
+                            "type": "string",
+                            "description": "ファイルURL",
+                            "example": "https://api.dandoli.jp/api/co/places/place_code:/sites/site_code:/site_photos/12345-6789-012345.png/download"
+                          },
+                          "category_name": {
+                            "type": "string",
+                            "description": "カテゴリ",
+                            "example": "施工後"
+                          },
+                          "created": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "YYYY-MM-DD hh:mm:ss",
+                            "description": "投稿日",
+                            "example": "2019-01-01 12:00:00"
+                          },
+                          "created_user": {
+                            "type": "string",
+                            "description": "投稿者",
+                            "example": "crew_code"
+                          },
+                          "comment": {
+                            "type": "string",
+                            "description": "コメント",
+                            "example": "apiテスト用写真"
+                          }
+                        }
+                      }
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "現場資料の登録"
+        ],
+        "summary": "現場資料の登録",
+        "description": "一度にアップロードできるファイル数の上限は10ファイルまで。10ファイルより多い場合は、複数回に分ける。\n認証トークンは固定値とし、申請に応じてダンドリワーク側で振り出す。\n本番環境と検証環境で別々のトークンとなる。\n\n//サンプル--------------------------------------------------\nPOST  /api/co/places/example/sites/dummy/documents HTTP/1.1\nHost: https://api.dandoli.jp/\nAuthorization: Bearer ********************************\nContent-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW\nCache-Control: no-cache\n\n------WebKitFormBoundary7MA4YWxkTrZu0gW\nContent-Disposition: form-data; name=\"file_type\"\n\n各種図面\n------WebKitFormBoundary7MA4YWxkTrZu0gW\nContent-Disposition: form-data; name=\"data[files][]\"; filename=\"TEST1.png\"\nContent-Type: image/png\n\n\n------WebKitFormBoundary7MA4YWxkTrZu0gW\nContent-Disposition: form-data; name=\"data[files][]\"; filename=\"テスト２.pdf\"\nContent-Type: application/pdf\n\n\n------WebKitFormBoundary7MA4YWxkTrZu0gW\nContent-Disposition: form-data; name=\"data[crew][]\"\n\n100001\n------WebKitFormBoundary7MA4YWxkTrZu0gW\nContent-Disposition: form-data; name=\"data[crew][]\"\n\n100002\n------WebKitFormBoundary7MA4YWxkTrZu0gW--\n\nContent-Disposition: form-data; name=\"update_crew\"\n\n100033\n------WebKitFormBoundary7MA4YWxkTrZu0gW--",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "description": "現場コード　連携元で登録したコードを設定",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file_type": {
+                    "description": "ファイル種類\n名称の完全一致でプレイス設定のファイル種類を特定し設定する。",
+                    "type": "string",
+                    "example": "工程表"
+                  },
+                  "data[files][]": {
+                    "description": "ファイル情報\n※ 複数指定可能（上限10ファイル）\n\nContent-Disposition:\nform-data; name=\"data[files][]\";\nfilename=\"<ファイル名>\"\nContent-Type: <コンテンツタイプ>",
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "data[crew][]": {
+                    "description": "ファイルを閲覧できるユーザーのユーザーコードを配列で指定 ※複数指定可能\n\n設定がなければ現場参加者全員が宛先となる\n\nContent-Disposition:\nform-data; name=\"data[crew][]\"\n",
+                    "type": "string",
+                    "example": "user1"
+                  },
+                  "data[prime_crew][]": {
+                    "description": "ファイルを閲覧できる発注元ユーザーのユーザーコードを配列で指定 ※複数指定可能\n\n設定がなければ現場参加者全員が宛先となる\n\nContent-Disposition:\nform-data; name=\"data[crew][]\"\n",
+                    "type": "string",
+                    "example": "user1"
+                  },
+                  "update_crew": {
+                    "description": "更新ユーザーのコードを設定\n\nContent-Disposition:\nform-data; name=\"update_crew\"",
+                    "type": "string",
+                    "example": "user2"
+                  }
+                },
+                "required": [
+                  "file_type",
+                  "data[files][]",
+                  "update_crew"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "description": "登録数",
+                          "example": 1
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "example": null
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "ファイルを保存しました。",
+                      "description": "システムメッセージ"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/{site_code}/documents/{uuid}/download": {
+      "get": {
+        "tags": [
+          "現場資料取得"
+        ],
+        "summary": "現場資料取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "required": true,
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "required": true,
+            "description": "現場コード　取得する現場を特定するコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "description": "ファイルID　取得するファイルを特定するIDを設定する",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "image/xxx": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "現場資料を返却"
+                }
+              },
+              "application/json(取得失敗時のみ)": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "以下のいずれかを返却する。\n取得失敗 : 取得に失敗しました",
+                      "example": "取得失敗 : 取得に失敗しました"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる",
+                      "example": ":uuid: 該当するファイルが見つかりませんでした"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/count": {
+      "get": {
+        "tags": [
+          "現場数取得"
+        ],
+        "summary": "現場数取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_status",
+            "in": "query",
+            "description": "現場ステータス\n複数指定したい場合はカンマ区切りで入力する\n1：追客中 ／ 2：契約中 ／ 3：着工中 ／ 4：完工 ／ 5：中止 ／ 6：他決",
+            "explode": false,
+            "style": "form",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_type",
+            "in": "query",
+            "description": "現場の種類\nプレイス設定-現場種類取得APIで取得できる現場種類コードを指定可能\n複数指定したい場合はカンマ区切りで入力する",
+            "explode": false,
+            "style": "form",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "example": 4
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "次のいずれかを返却する。\n取得失敗 : 取得に失敗しました"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる",
+                      "example": {
+                        "site_type": "現場種類が不正です"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/{site_code}/site_crews": {
+      "get": {
+        "tags": [
+          "現場参加者取得"
+        ],
+        "summary": "現場参加者取得",
+        "description": "現場の役割担当者と参加ユーザーを取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "description": "現場コード　連携元で登録したコードを設定",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "casts": {
+                          "type": "array",
+                          "description": "役割担当者",
+                          "items": {
+                            "properties": {
+                              "cast_name": {
+                                "type": "string",
+                                "description": "役割名"
+                              },
+                              "cast": {
+                                "type": "string",
+                                "description": "役割担当者のユーザーコード\n\nユーザーコード未設定の場合: \"ユーザーコードが設定されていないユーザーです\""
+                              }
+                            }
+                          },
+                          "example": [
+                            {
+                              "cast_name": "営業担当",
+                              "cast": "user7"
+                            },
+                            {
+                              "cast_name": "営業サポート１",
+                              "cast": "user8"
+                            },
+                            {
+                              "cast_name": "営業サポート２",
+                              "cast": "ユーザーコードが設定されていないユーザーです"
+                            }
+                          ]
+                        },
+                        "workers": {
+                          "type": "array",
+                          "description": "現場参加ユーザー",
+                          "items": {
+                            "properties": {
+                              "worker": {
+                                "type": "string",
+                                "description": "現場参加ユーザー\n\n現場に参加しているユーザーのユーザーコードを返す。\n\nユーザーコード未設定の場合: \"ユーザーコードが設定されていないユーザーです\"\n"
+                              }
+                            }
+                          },
+                          "example": [
+                            {
+                              "worker": "user7"
+                            },
+                            {
+                              "worker": "user8"
+                            },
+                            {
+                              "worker": "ユーザーコードが設定されていないユーザーです"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "次のいずれかを返却する。\n取得失敗 : 取得に失敗しました"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/settings/site_types": {
+      "get": {
+        "tags": [
+          "プレイス設定-現場種類-取得"
+        ],
+        "summary": "プレイス設定-現場種類 取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "required": true,
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "properties": {
+                          "site_type": {
+                            "type": "string",
+                            "description": "現場種類コード"
+                          },
+                          "site_type_name": {
+                            "type": "string",
+                            "description": "現場種類名"
+                          }
+                        }
+                      },
+                      "example": [
+                        {
+                          "site_type": "1",
+                          "site_name": "リフォーム"
+                        },
+                        {
+                          "site_type": "2",
+                          "site_name": "新築"
+                        },
+                        {
+                          "site_type": "3",
+                          "site_name": "テスト用種類！"
+                        }
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "以下のいずれかを返却する。\n取得失敗 : 取得に失敗しました",
+                      "example": "取得に失敗しました"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/{site_code}/site_photos": {
+      "get": {
+        "tags": [
+          "現場写真情報取得"
+        ],
+        "summary": "現場写真情報取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "required": true,
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "required": true,
+            "description": "現場コード　取得する現場を特定するコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_created",
+            "in": "query",
+            "description": "投稿日（期間指定開始日）\nYYYY-MM-DD形式\n投稿日（期間指定終了日）を設定しない場合、投稿日（期間指定開始日）以降に投稿された画像を取得",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_created",
+            "in": "query",
+            "description": "投稿日（期間指定終了日）\nYYYY-MM-DD形式",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "category_name",
+            "in": "query",
+            "description": "現場写真のカテゴリ  \n現場の種類に対応するカテゴリ名を完全一致で指定する。（URLエンコード必須）\n\n＜使用例＞  \n単一カテゴリ指定（string）  \n&nbsp;&nbsp;`category_name=施工前`\n\n複数カテゴリ指定（Array of string）  \n&nbsp;&nbsp;`category_name[]=施工前&category_name[]=施工中&category_name[]=施工後`",
+            "schema": {
+              "type": "string or Array of string"
+            },
+            "explode": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "properties": {
+                          "file_name": {
+                            "type": "string",
+                            "description": "ファイル名",
+                            "example": "test_site_photo.png"
+                          },
+                          "file_url": {
+                            "type": "string",
+                            "description": "ファイルURL",
+                            "example": "https://api.dandoli.jp/api/co/places/place_code:/sites/site_code:/site_photos/12345-6789-012345.png/download"
+                          },
+                          "file_size": {
+                            "type": "string",
+                            "description": "ファイルサイズ (byte)",
+                            "example": 104825
+                          },
+                          "thumbnail_url": {
+                            "type": "string",
+                            "description": "サムネイルファイルURL",
+                            "example": "https://api.dandoli.jp/api/co/places/place_code:/sites/site_code:/site_photos/12345-6789-012345.png/download_thumb"
+                          },
+                          "category_name": {
+                            "type": "string",
+                            "description": "カテゴリ",
+                            "example": "施工後"
+                          },
+                          "created": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "YYYY-MM-DD hh:mm:ss",
+                            "description": "投稿日",
+                            "example": "2019-01-01 12:00:00"
+                          },
+                          "shooting_date": {
+                            "type": "string",
+                            "pattern": "YYYY-MM-DD hh:mm:ss",
+                            "description": "撮影日",
+                            "example": "2019-01-01 12:00:00"
+                          },
+                          "created_user": {
+                            "type": "string",
+                            "description": "投稿者",
+                            "example": "crew_code"
+                          },
+                          "comment": {
+                            "type": "string",
+                            "description": "コメント",
+                            "example": "apiテスト用写真"
+                          }
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "以下のいずれかを返却する。\n取得失敗 : 取得に失敗しました"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "現場写真の登録"
+        ],
+        "summary": "現場写真の登録",
+        "description": "一度にアップロードできる写真ファイル数の上限は10ファイルまで。10ファイルより多い場合は、複数回に分ける。\n認証トークンは固定値とし、申請に応じてダンドリワーク側で振り出す。\n本番環境と検証環境で別々のトークンとなる。",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "description": "現場コード　連携元で登録したコードを設定",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "category_name": {
+                    "description": "現場写真のカテゴリ\n名称の完全一致でプレイス設定の現場写真のカテゴリを特定し設定する。",
+                    "type": "string",
+                    "example": "工程表"
+                  },
+                  "data[files][]": {
+                    "description": "ファイル情報\n※ 複数指定可能（上限10ファイル）\n\nContent-Disposition:\nform-data; name=\"data[files][]\";\nfilename=\"<ファイル名>\"\nContent-Type: <コンテンツタイプ>",
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "update_crew": {
+                    "description": "更新ユーザーのコードを設定\n\nContent-Disposition:\nform-data; name=\"update_crew\"",
+                    "type": "string",
+                    "example": "user2"
+                  }
+                },
+                "required": [
+                  "category_name",
+                  "data[files][]",
+                  "update_crew"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "description": "登録数",
+                          "example": 1
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "object",
+                      "example": null
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "ファイルを保存しました。",
+                      "description": "システムメッセージ"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/{site_code}/site_photos/{uuid}/download": {
+      "get": {
+        "tags": [
+          "現場写真取得"
+        ],
+        "summary": "現場写真取得",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "required": true,
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "required": true,
+            "description": "現場コード　取得する現場を特定するコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "description": "ファイルID　取得するファイルを特定するIDを設定する",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "image/xxx": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "バイナリで現場写真を返却"
+                }
+              },
+              "application/json(取得失敗時のみ)": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "以下のいずれかを返却する。\n取得失敗 : 取得に失敗しました",
+                      "example": "取得失敗 : 取得に失敗しました"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる",
+                      "example": ":uuid: 該当するファイルが見つかりませんでした"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    },
+    "/co/places/{place_code}/sites/{site_code}/site_photos/{uuid}/download_thumb": {
+      "get": {
+        "tags": [
+          "現場写真取得（サムネイル）"
+        ],
+        "summary": "現場写真取得（サムネイル）",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "place_code",
+            "in": "path",
+            "required": true,
+            "description": "プレイスコード　ダンドリワーク側で振り出したコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "path",
+            "required": true,
+            "description": "現場コード　取得する現場を特定するコードを設定する",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "description": "ファイルID　取得するファイルを特定するIDを設定する",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "正常終了",
+            "content": {
+              "image/xxx": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "バイナリで現場写真を返却"
+                }
+              },
+              "application/json(取得失敗時のみ)": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "true：成功 ／ false：失敗"
+                    },
+                    "config": {
+                      "type": "object",
+                      "description": "システム情報。このAPIではnullがセットされる",
+                      "example": null
+                    },
+                    "data": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "以下のいずれかを返却する。\n取得失敗 : 取得に失敗しました",
+                      "example": "取得失敗 : 取得に失敗しました"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "エラー発生時にキー毎のエラー情報がセットされる",
+                      "example": ":uuid: 該当するファイルが見つかりませんでした"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "クライアント起因のエラー"
+          },
+          "5XX": {
+            "description": "サーバー起因のエラー"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SiteListInfo": {
+        "type": "object",
+        "properties": {
+          "site_code": {
+            "type": "string",
+            "example": "code12345",
+            "description": "現場コード"
+          },
+          "name": {
+            "type": "string",
+            "example": "ダンドリ現場虎ノ門",
+            "description": "現場名"
+          },
+          "site_type": {
+            "type": "integer",
+            "example": 1,
+            "description": "現場種類"
+          },
+          "site_start_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "example": "2019-01-12",
+            "description": "着工予定日"
+          },
+          "site_status": {
+            "type": "integer",
+            "example": 1,
+            "description": "現場ステータス （1：追客中 ／ 2：契約中 ／ 3：着工中 ／ 4：完工 ／ 5：中止 ／ 6：他決）"
+          },
+          "office_code": {
+            "type": "string",
+            "example": "A17",
+            "description": "担当営業所コード　\nダンドリワーク側の「営業所コード」と合致すれば返却する"
+          },
+          "site_end_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "example": "2019-02-16",
+            "description": "完工予定日"
+          },
+          "contract_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "example": "2018-06-01",
+            "description": "契約日"
+          },
+          "contract_num": {
+            "type": "string",
+            "description": "契約番号",
+            "example": "ABC00001"
+          },
+          "customer": {
+            "type": "object",
+            "description": "施主情報",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "施主氏名",
+                "example": "施主 太郎"
+              },
+              "name_kana": {
+                "type": "string",
+                "description": "施主氏名（フリガナ）",
+                "example": "セシュ タロウ"
+              }
+            }
+          },
+          "zip_code": {
+            "type": "string",
+            "example": "525-0050",
+            "description": "現場郵便番号 「000-0000」形式で返却する"
+          },
+          "address": {
+            "type": "string",
+            "example": "滋賀県草津市南草津２丁目１−７",
+            "description": "現場住所\n「都道府県 + 市区町村 + 番地名 + 建物名」を結合して返却する"
+          },
+          "address_detail": {
+            "type": "object",
+            "description": "現場住所詳細",
+            "properties": {
+              "pref_name": {
+                "type": "string",
+                "example": "滋賀県",
+                "description": "都道府県名"
+              },
+              "city": {
+                "type": "string",
+                "example": "草津市",
+                "description": "市区町村"
+              },
+              "address1": {
+                "type": "string",
+                "example": "南草津２丁目１−７",
+                "description": "番地名"
+              },
+              "address2": {
+                "type": "string",
+                "example": "ラクーンビル",
+                "description": "建物名"
+              }
+            }
+          },
+          "location": {
+            "type": "object",
+            "description": "現場位置情報",
+            "properties": {
+              "lat": {
+                "type": "string",
+                "example": "34.947052",
+                "description": "緯度"
+              },
+              "lng": {
+                "type": "string",
+                "example": "136.880952",
+                "description": "経度"
+              }
+            }
+          },
+          "prime_contract_manager": {
+            "$ref": "#/components/schemas/Prime_contract_manager"
+          },
+          "manager": {
+            "$ref": "#/components/schemas/Manager"
+          },
+          "site_original_values": {
+            "$ref": "#/components/schemas/Site_original_values_response"
+          },
+          "customer_original_values": {
+            "$ref": "#/components/schemas/Customer_original_values_response"
+          },
+          "prime_contract_place_code": {
+            "type": "string",
+            "example": "placecode111",
+            "description": "発注元プレイスコード"
+          },
+          "prime_contract_place_name": {
+            "type": "string",
+            "example": "ABC建設",
+            "description": "発注元プレイス名"
+          },
+          "prime_contract_office_code": {
+            "type": "string",
+            "example": null,
+            "description": "発注元の営業所コード"
+          },
+          "sub_contract_place_code": {
+            "type": "string",
+            "example": null,
+            "description": "請負プレイスコード"
+          },
+          "sub_contract_place_name": {
+            "type": "string",
+            "example": null,
+            "description": "請負プレイス名"
+          },
+          "url": {
+            "type": "string",
+            "description": "ダンドリワーク現場詳細URL",
+            "example": "https://dandoli.jp/example/sites/100000/info"
+          }
+        }
+      },
+      "SiteInfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "現場名",
+            "example": "現場名",
+            "maxLength": 128,
+            "nullable": false
+          },
+          "site_type": {
+            "type": "integer",
+            "description": "現場種類ID",
+            "example": 2,
+            "maxLength": 1,
+            "nullable": false
+          },
+          "contract_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "description": "契約日",
+            "example": "2019-01-01"
+          },
+          "contract_num": {
+            "type": "string",
+            "description": "契約番号\n\n*契約番号を利用した連携の場合は項目不要\n",
+            "example": "ABC00001",
+            "maxLength": 32
+          },
+          "site_start_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "description": "着工予定日\n\n※値が不要な場合はnullを送信。項目は必須。\n",
+            "nullable": false,
+            "example": "2019-02-01"
+          },
+          "site_status": {
+            "type": "integer",
+            "description": "現場ステータスID\n1：追客中 ／ 2：契約中 ／ 3：着工中 ／ 4：完工 ／ 5：中止 ／ 6：他決 ／ null：ステータス変更しない  ※項目は必須",
+            "example": 3,
+            "maxLength": 1
+          },
+          "office_code": {
+            "type": "string",
+            "description": "担当営業所コード 連携元で登録したコードを設定、ダンドリワーク側の「営業所コード」と合致すれば登録・更新する\n\n※値が不要な場合はnullを送信。項目は必須。\n",
+            "nullable": false,
+            "example": "OFO001DYIU",
+            "maxLength": 255
+          },
+          "site_end_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "description": "完工予定日\n\n※値が不要な場合はnullを送信。項目は必須。\n",
+            "nullable": false,
+            "example": "2019-03-01"
+          },
+          "prime_contract_place_code": {
+            "type": "string",
+            "description": "発注元プレイスコード\n\n※発注元が作成した現場を更新する場合のみ、必須項目。\n\n（更新はできない。現場レコードを特定するために必要）\n",
+            "nullable": false,
+            "example": "placecode222",
+            "maxLength": 45
+          },
+          "floors": {
+            "type": "array",
+            "description": "フロア一覧　削除する場合は空配列をセット",
+            "items": {
+              "properties": {
+                "is_basement": {
+                  "type": "integer",
+                  "description": "0: 地上　／ 1: 地下",
+                  "example": 0,
+                  "maxLength": 1
+                },
+                "number": {
+                  "type": "integer",
+                  "description": "階数",
+                  "example": 1,
+                  "maxLength": 11
+                },
+                "area": {
+                  "type": "number",
+                  "format": "float",
+                  "description": "面積　単位は㎡",
+                  "example": 150.5
+                }
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "description": "施主情報",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "施主氏名",
+                "nullable": false,
+                "example": "施主 太郎",
+                "maxLength": 45
+              },
+              "name_kana": {
+                "type": "string",
+                "description": "施主氏名（フリガナ）",
+                "nullable": false,
+                "example": "セシュ　タロウ",
+                "maxLength": 45
+              },
+              "email": {
+                "type": "string",
+                "description": "Eメールアドレス",
+                "example": "sample@example.com",
+                "maxLength": 100
+              },
+              "tel": {
+                "type": "string",
+                "description": "電話番号(ハイフン区切り)",
+                "example": "06-1234-1234",
+                "maxLength": 45
+              },
+              "fax": {
+                "type": "string",
+                "description": "FAX番号(ハイフン区切り)",
+                "example": "06-1234-1234",
+                "maxLength": 45
+              },
+              "mobile": {
+                "type": "string",
+                "description": "携帯電話番号(ハイフン区切り)",
+                "example": "090-1234-1234",
+                "maxLength": 45
+              }
+            },
+            "required": [
+              "name",
+              "name_kana"
+            ]
+          },
+          "zip_code": {
+            "type": "string",
+            "description": "現場郵便番号(ハイフン区切り「000-0000」形式)",
+            "example": "525-0050",
+            "maxLength": 8
+          },
+          "address": {
+            "type": "string",
+            "description": "現場住所(都道府県（漢字入力）の値が必須、以下はいずれの形でも問題ありません)\n\n※「address」または「address_detail」のいずれかの入力が必須。<br>\n※値が不要な場合はnullを送信。（ただし「address_detail」に入力がある場合は空欄にする。）<br>\n※addressとaddress_detailの両方に値がある場合、addressが優先される。\n",
+            "nullable": false,
+            "example": "滋賀県草津市南草津２丁目１−７"
+          },
+          "address_detail": {
+            "type": "object",
+            "description": "現場住所詳細\n\n※「address」または「address_detail」のいずれかの入力が必須。<br>\n※addressとaddress_detailの両方に値がある場合、addressが優先される。\n",
+            "properties": {
+              "pref_name": {
+                "type": "string",
+                "example": "滋賀県",
+                "description": "都道府県名　漢字入力の値が必須。\n\n※値が不要な場合はnullを送信。（ただし「address」に入力がある場合は空欄にする。）\n"
+              },
+              "city": {
+                "type": "string",
+                "example": "草津市",
+                "description": "市区町村"
+              },
+              "address1": {
+                "type": "string",
+                "example": "南草津２丁目１−７",
+                "description": "番地名"
+              },
+              "address2": {
+                "type": "string",
+                "example": "ラクーンビル",
+                "description": "建物名"
+              }
+            },
+            "required": [
+              "pref_name"
+            ]
+          },
+          "location": {
+            "type": "object",
+            "description": "現場位置情報",
+            "properties": {
+              "lat": {
+                "type": "number",
+                "format": "float",
+                "description": "緯度",
+                "example": 34.69371
+              },
+              "lng": {
+                "type": "number",
+                "format": "float",
+                "description": "経度",
+                "example": 135.507898
+              }
+            }
+          },
+          "customer_request": {
+            "type": "string",
+            "description": "お客様要望",
+            "example": "お客様からのご要望です。",
+            "maxLength": 20000
+          },
+          "manager": {
+            "type": "object",
+            "description": "管理担当情報",
+            "properties": {
+              "admin": {
+                "type": "string",
+                "description": "現場管理担当者のユーザーコード",
+                "example": "user1",
+                "maxLength": 255,
+                "nullable": false
+              },
+              "sub_admin1": {
+                "type": "string",
+                "description": "現場管理サブ担当者のユーザーコード",
+                "nullable": false,
+                "example": "user2",
+                "maxLength": 255
+              },
+              "sub_admin2": {
+                "type": "string",
+                "description": "現場管理サブ担当者のユーザーコード",
+                "nullable": false,
+                "example": "user3",
+                "maxLength": 255
+              },
+              "sub_admin3": {
+                "type": "string",
+                "description": "現場管理サブ担当者のユーザーコード",
+                "nullable": false,
+                "example": "user4",
+                "maxLength": 255
+              },
+              "sub_admin4": {
+                "type": "string",
+                "description": "現場管理サブ担当者のユーザーコード",
+                "example": "user5",
+                "maxLength": 255
+              },
+              "sub_admin5": {
+                "type": "string",
+                "description": "現場管理サブ担当者のユーザーコード",
+                "example": "user6",
+                "maxLength": 255
+              }
+            },
+            "required": [
+              "admin",
+              "sub_admin1",
+              "sub_admin2",
+              "sub_admin3"
+            ]
+          },
+          "casts": {
+            "type": "array",
+            "description": "役割担当者　削除する場合は空配列をセット",
+            "items": {
+              "properties": {
+                "cast_name": {
+                  "type": "string",
+                  "description": "役割名　「プレイス設定 ＞ 役割担当者のカテゴリ画面」で登録されている担当項目名をセット"
+                },
+                "cast": {
+                  "type": "string",
+                  "description": "役割担当者のユーザーコード"
+                }
+              }
+            },
+            "example": [
+              {
+                "cast_name": "営業担当",
+                "cast": "user7"
+              },
+              {
+                "cast_name": "営業サポート１",
+                "cast": "user8"
+              }
+            ]
+          },
+          "workers": {
+            "type": "array",
+            "description": "参加ユーザー　削除する場合は空配列をセット",
+            "items": {
+              "properties": {
+                "worker": {
+                  "type": "string",
+                  "description": "参加ユーザーコード"
+                }
+              }
+            },
+            "example": [
+              {
+                "worker": "user7"
+              },
+              {
+                "worker": "user8"
+              }
+            ]
+          },
+          "site_original_values": {
+            "$ref": "#/components/schemas/Site_original_values"
+          },
+          "customer_original_values": {
+            "$ref": "#/components/schemas/Customer_original_values"
+          }
+        },
+        "required": [
+          "name",
+          "site_type",
+          "site_start_date",
+          "site_status",
+          "office_code",
+          "site_end_date",
+          "customer",
+          "address",
+          "address_detail"
+        ]
+      },
+      "ResponseSiteInfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "現場名",
+            "example": "現場名",
+            "maxLength": 128,
+            "nullable": false
+          },
+          "site_type": {
+            "type": "integer",
+            "description": "現場種類ID",
+            "example": 2
+          },
+          "contract_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "description": "契約日",
+            "example": "2019-01-01"
+          },
+          "contract_num": {
+            "type": "string",
+            "description": "契約番号",
+            "example": "ABC00001"
+          },
+          "site_start_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "description": "着工日",
+            "example": "2019-02-01"
+          },
+          "site_status": {
+            "type": "integer",
+            "description": "現場ステータスID\n1：追客中 ／ 2：契約中 ／ 3：着工中 ／ 4：完工 ／ 5：中止 ／ 6：他決",
+            "example": 3
+          },
+          "office_code": {
+            "type": "string",
+            "description": "担当営業所コード",
+            "example": "OFO001DYIU"
+          },
+          "site_end_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD",
+            "description": "完工日",
+            "example": "2019-03-01"
+          },
+          "floors": {
+            "type": "array",
+            "description": "フロア一覧",
+            "items": {
+              "properties": {
+                "is_basement": {
+                  "type": "integer",
+                  "description": "0: 地上　／ 1: 地下",
+                  "example": 0
+                },
+                "number": {
+                  "type": "integer",
+                  "description": "階数",
+                  "example": 1
+                },
+                "area": {
+                  "type": "number",
+                  "format": "float",
+                  "description": "面積　単位は㎡",
+                  "example": 150.5
+                }
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "description": "施主情報",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "施主氏名",
+                "example": "施主 太郎"
+              },
+              "name_kana": {
+                "type": "string",
+                "description": "施主氏名（フリガナ）",
+                "example": "セシュ　タロウ"
+              },
+              "email": {
+                "type": "string",
+                "description": "Eメールアドレス",
+                "example": "sample@example.com"
+              },
+              "tel": {
+                "type": "string",
+                "description": "電話番号(ハイフン区切り)",
+                "example": "06-1234-1234"
+              },
+              "fax": {
+                "type": "string",
+                "description": "FAX番号(ハイフン区切り)",
+                "example": "06-1234-1234"
+              },
+              "mobile": {
+                "type": "string",
+                "description": "携帯電話番号(ハイフン区切り)",
+                "example": "090-1234-1234"
+              }
+            }
+          },
+          "zip_code": {
+            "type": "string",
+            "description": "現場郵便番号(ハイフン区切り「000-0000」形式)",
+            "example": "525-0050"
+          },
+          "address": {
+            "type": "string",
+            "description": "現場住所",
+            "example": "滋賀県草津市南草津２丁目１−７"
+          },
+          "address_detail": {
+            "type": "object",
+            "description": "現場住所詳細",
+            "properties": {
+              "pref_name": {
+                "type": "string",
+                "example": "滋賀県",
+                "description": "都道府県名"
+              },
+              "city": {
+                "type": "string",
+                "example": "草津市",
+                "description": "市区町村"
+              },
+              "address1": {
+                "type": "string",
+                "example": "南草津２丁目１−７",
+                "description": "番地名"
+              },
+              "address2": {
+                "type": "string",
+                "example": "ラクーンビル",
+                "description": "建物名"
+              }
+            }
+          },
+          "location": {
+            "type": "object",
+            "description": "現場位置情報",
+            "properties": {
+              "lat": {
+                "type": "number",
+                "format": "float",
+                "description": "緯度",
+                "example": 34.69371
+              },
+              "lng": {
+                "type": "number",
+                "format": "float",
+                "description": "経度",
+                "example": 135.507898
+              }
+            }
+          },
+          "customer_request": {
+            "type": "string",
+            "description": "お客様要望",
+            "example": "お客様からのご要望です"
+          },
+          "prime_contract_manager": {
+            "type": "object",
+            "properties": {
+              "admin": {
+                "type": "string",
+                "description": "発注元担当者のユーザーコード",
+                "example": "user1",
+                "maxLength": 255,
+                "nullable": false
+              },
+              "sub_admins": {
+                "type": "array",
+                "description": "発注元サブ担当者のユーザーコード",
+                "items": {
+                  "type": "string",
+                  "description": "発注元サブ担当者のユーザーコード"
+                },
+                "example": [
+                  "user2",
+                  "user3",
+                  "user4"
+                ],
+                "maxLength": 255,
+                "nullable": false
+              }
+            }
+          },
+          "manager": {
+            "type": "object",
+            "description": "管理担当情報",
+            "properties": {
+              "admin": {
+                "type": "string",
+                "example": "user1",
+                "description": "現場管理担当者のユーザーコード"
+              },
+              "sub_admin1": {
+                "type": "string",
+                "example": "user2",
+                "description": "現場管理サブ担当者のユーザーコード"
+              },
+              "sub_admin2": {
+                "type": "string",
+                "example": "user3",
+                "description": "現場管理サブ担当者のユーザーコード"
+              },
+              "sub_admin3": {
+                "type": "string",
+                "example": "user4",
+                "description": "現場管理サブ担当者のユーザーコード"
+              },
+              "sub_admin4": {
+                "type": "string",
+                "example": "user5",
+                "description": "現場管理サブ担当者のユーザーコード"
+              },
+              "sub_admin5": {
+                "type": "string",
+                "example": "user6",
+                "description": "現場管理サブ担当者のユーザーコード"
+              }
+            }
+          },
+          "casts": {
+            "type": "array",
+            "description": "役割担当者",
+            "items": {
+              "properties": {
+                "cast_name": {
+                  "type": "string",
+                  "description": "役割名"
+                },
+                "cast": {
+                  "type": "string",
+                  "description": "役割担当者のユーザーコード"
+                }
+              }
+            },
+            "example": [
+              {
+                "cast_name": "営業担当",
+                "cast": "user7"
+              },
+              {
+                "cast_name": "営業サポート１",
+                "cast": "user8"
+              }
+            ]
+          },
+          "workers": {
+            "type": "array",
+            "description": "参加ユーザー",
+            "items": {
+              "properties": {
+                "worker": {
+                  "type": "string",
+                  "description": "参加ユーザーコード"
+                }
+              }
+            },
+            "example": [
+              {
+                "worker": "user7"
+              },
+              {
+                "worker": "user8"
+              }
+            ]
+          },
+          "site_original_values": {
+            "$ref": "#/components/schemas/Site_original_values_response"
+          },
+          "customer_original_values": {
+            "$ref": "#/components/schemas/Customer_original_values_response"
+          },
+          "prime_contract_place_code": {
+            "type": "string",
+            "example": "placecode111",
+            "description": "発注元プレイスコード"
+          },
+          "prime_contract_place_name": {
+            "type": "string",
+            "example": "ABC建設",
+            "description": "発注元プレイス名"
+          },
+          "prime_contract_office_code": {
+            "type": "string",
+            "example": null,
+            "description": "発注元の営業所コード"
+          },
+          "sub_contract_place_code": {
+            "type": "string",
+            "example": null,
+            "description": "請負プレイスコード"
+          },
+          "sub_contract_place_name": {
+            "type": "string",
+            "example": null,
+            "description": "請負プレイス名"
+          },
+          "url": {
+            "type": "string",
+            "description": "ダンドリワーク現場情報画面URL",
+            "example": "https://dandoli.jp/example/sites/100000/info"
+          }
+        }
+      },
+      "Prime_contract_manager": {
+        "type": "object",
+        "properties": {
+          "admin": {
+            "type": "string",
+            "example": "user1",
+            "description": "発注元担当者のユーザーコード"
+          },
+          "sub_admins": {
+            "type": "array",
+            "description": "発注元サブ担当者のユーザーコード",
+            "items": {
+              "type": "string",
+              "description": "発注元サブ担当者のユーザーコード"
+            },
+            "example": [
+              "user2",
+              "user3",
+              "user4"
+            ]
+          }
+        }
+      },
+      "Manager": {
+        "type": "object",
+        "properties": {
+          "admin": {
+            "type": "string",
+            "example": "user1",
+            "description": "現場管理担当者のユーザーコード"
+          },
+          "sub_admin1": {
+            "type": "string",
+            "example": "user2",
+            "description": "現場管理サブ担当者のユーザーコード"
+          },
+          "sub_admin2": {
+            "type": "string",
+            "example": "user2",
+            "description": "現場管理サブ担当者のユーザーコード"
+          },
+          "sub_admin3": {
+            "type": "string",
+            "example": "user2",
+            "description": "現場管理サブ担当者のユーザーコード"
+          }
+        }
+      },
+      "Site_original_values": {
+        "type": "array",
+        "description": "オリジナル項目(基本情報)　\nオリジナル項目配列が存在しない場合は更新しない",
+        "items": {
+          "properties": {
+            "column_name": {
+              "type": "string",
+              "description": "項目ID　\n「value_1」 ~ 「value_50」のいずれか。\n存在しない項目IDは更新しない。"
+            },
+            "value": {
+              "type": "string",
+              "description": "オリジナル項目の値　プレイス設定画面で項目設定したデータ型であること。\"\"（空文字）の場合は値をクリアする。入力必須のチェックは行わない。"
+            }
+          }
+        },
+        "example": [
+          {
+            "column_name": "value_1",
+            "value": "オリジナル項目1"
+          },
+          {
+            "column_name": "value_2",
+            "value": "オリジナル項目2"
+          },
+          {
+            "column_name": "value_3",
+            "value": "オリジナル項目3"
+          },
+          {
+            "column_name": "value_4",
+            "value": "オリジナル項目4"
+          },
+          {
+            "column_name": "value_5",
+            "value": "オリジナル項目5"
+          },
+          {
+            "column_name": "value_6",
+            "value": "オリジナル項目6"
+          },
+          {
+            "column_name": "value_7",
+            "value": "オリジナル項目7"
+          },
+          {
+            "column_name": "value_8",
+            "value": "オリジナル項目8"
+          },
+          {
+            "column_name": "value_9",
+            "value": "オリジナル項目9"
+          },
+          {
+            "column_name": "value_10",
+            "value": "オリジナル項目10"
+          },
+          {
+            "column_name": "value_11",
+            "value": "オリジナル項目11"
+          },
+          {
+            "column_name": "value_12",
+            "value": "オリジナル項目12"
+          },
+          {
+            "column_name": "value_13",
+            "value": "オリジナル項目13"
+          },
+          {
+            "column_name": "value_14",
+            "value": "オリジナル項目14"
+          },
+          {
+            "column_name": "value_15",
+            "value": "オリジナル項目15"
+          },
+          {
+            "column_name": "value_16",
+            "value": "オリジナル項目16"
+          },
+          {
+            "column_name": "value_17",
+            "value": "オリジナル項目17"
+          },
+          {
+            "column_name": "value_18",
+            "value": "オリジナル項目18"
+          },
+          {
+            "column_name": "value_19",
+            "value": "オリジナル項目19"
+          },
+          {
+            "column_name": "value_20",
+            "value": "オリジナル項目20"
+          },
+          {
+            "column_name": "value_21",
+            "value": "オリジナル項目21"
+          },
+          {
+            "column_name": "value_22",
+            "value": "オリジナル項目22"
+          },
+          {
+            "column_name": "value_23",
+            "value": "オリジナル項目23"
+          },
+          {
+            "column_name": "value_24",
+            "value": "オリジナル項目24"
+          },
+          {
+            "column_name": "value_25",
+            "value": "オリジナル項目25"
+          },
+          {
+            "column_name": "value_26",
+            "value": "オリジナル項目26"
+          },
+          {
+            "column_name": "value_27",
+            "value": "オリジナル項目27"
+          },
+          {
+            "column_name": "value_28",
+            "value": "オリジナル項目28"
+          },
+          {
+            "column_name": "value_29",
+            "value": "オリジナル項目29"
+          },
+          {
+            "column_name": "value_30",
+            "value": "オリジナル項目30"
+          },
+          {
+            "column_name": "value_31",
+            "value": "オリジナル項目31"
+          },
+          {
+            "column_name": "value_32",
+            "value": "オリジナル項目32"
+          },
+          {
+            "column_name": "value_33",
+            "value": "オリジナル項目33"
+          },
+          {
+            "column_name": "value_34",
+            "value": "オリジナル項目34"
+          },
+          {
+            "column_name": "value_35",
+            "value": "オリジナル項目35"
+          },
+          {
+            "column_name": "value_36",
+            "value": "オリジナル項目36"
+          },
+          {
+            "column_name": "value_37",
+            "value": "オリジナル項目37"
+          },
+          {
+            "column_name": "value_38",
+            "value": "オリジナル項目38"
+          },
+          {
+            "column_name": "value_39",
+            "value": "オリジナル項目39"
+          },
+          {
+            "column_name": "value_40",
+            "value": "オリジナル項目40"
+          },
+          {
+            "column_name": "value_41",
+            "value": "オリジナル項目41"
+          },
+          {
+            "column_name": "value_42",
+            "value": "オリジナル項目42"
+          },
+          {
+            "column_name": "value_43",
+            "value": "オリジナル項目43"
+          },
+          {
+            "column_name": "value_44",
+            "value": "オリジナル項目44"
+          },
+          {
+            "column_name": "value_45",
+            "value": "オリジナル項目45"
+          },
+          {
+            "column_name": "value_46",
+            "value": "オリジナル項目46"
+          },
+          {
+            "column_name": "value_47",
+            "value": "オリジナル項目47"
+          },
+          {
+            "column_name": "value_48",
+            "value": "オリジナル項目48"
+          },
+          {
+            "column_name": "value_49",
+            "value": "オリジナル項目49"
+          },
+          {
+            "column_name": "value_50",
+            "value": "オリジナル項目50"
+          }
+        ],
+        "minItems": 0,
+        "maxItems": 50
+      },
+      "Site_original_values_response": {
+        "type": "array",
+        "description": "オリジナル項目(基本情報)　値が入っているかに関わらずvalue1~50全ての項目を配列で返却する",
+        "items": {
+          "properties": {
+            "column_name": {
+              "type": "string",
+              "description": "項目ID　\n「value_1」 ~ 「value_50」のいずれか。"
+            },
+            "value": {
+              "type": "string",
+              "description": "オリジナル項目の値　日付、数値の場合もStringとして返却する"
+            }
+          }
+        },
+        "example": [
+          {
+            "column_name": "value_1",
+            "value": "オリジナル項目1"
+          },
+          {
+            "column_name": "value_2",
+            "value": "オリジナル項目2"
+          },
+          {
+            "column_name": "value_3",
+            "value": "オリジナル項目3"
+          },
+          {
+            "column_name": "value_4",
+            "value": "オリジナル項目4"
+          },
+          {
+            "column_name": "value_5",
+            "value": "オリジナル項目5"
+          },
+          {
+            "column_name": "value_6",
+            "value": "オリジナル項目6"
+          },
+          {
+            "column_name": "value_7",
+            "value": "オリジナル項目7"
+          },
+          {
+            "column_name": "value_8",
+            "value": "オリジナル項目8"
+          },
+          {
+            "column_name": "value_9",
+            "value": "オリジナル項目9"
+          },
+          {
+            "column_name": "value_10",
+            "value": "オリジナル項目10"
+          },
+          {
+            "column_name": "value_11",
+            "value": "オリジナル項目11"
+          },
+          {
+            "column_name": "value_12",
+            "value": "オリジナル項目12"
+          },
+          {
+            "column_name": "value_13",
+            "value": "オリジナル項目13"
+          },
+          {
+            "column_name": "value_14",
+            "value": "オリジナル項目14"
+          },
+          {
+            "column_name": "value_15",
+            "value": "オリジナル項目15"
+          },
+          {
+            "column_name": "value_16",
+            "value": "オリジナル項目16"
+          },
+          {
+            "column_name": "value_17",
+            "value": "オリジナル項目17"
+          },
+          {
+            "column_name": "value_18",
+            "value": "オリジナル項目18"
+          },
+          {
+            "column_name": "value_19",
+            "value": "オリジナル項目19"
+          },
+          {
+            "column_name": "value_20",
+            "value": "オリジナル項目20"
+          },
+          {
+            "column_name": "value_21",
+            "value": "オリジナル項目21"
+          },
+          {
+            "column_name": "value_22",
+            "value": "オリジナル項目22"
+          },
+          {
+            "column_name": "value_23",
+            "value": "オリジナル項目23"
+          },
+          {
+            "column_name": "value_24",
+            "value": "オリジナル項目24"
+          },
+          {
+            "column_name": "value_25",
+            "value": "オリジナル項目25"
+          },
+          {
+            "column_name": "value_26",
+            "value": "オリジナル項目26"
+          },
+          {
+            "column_name": "value_27",
+            "value": "オリジナル項目27"
+          },
+          {
+            "column_name": "value_28",
+            "value": "オリジナル項目28"
+          },
+          {
+            "column_name": "value_29",
+            "value": "オリジナル項目29"
+          },
+          {
+            "column_name": "value_30",
+            "value": "オリジナル項目30"
+          },
+          {
+            "column_name": "value_31",
+            "value": "オリジナル項目31"
+          },
+          {
+            "column_name": "value_32",
+            "value": "オリジナル項目32"
+          },
+          {
+            "column_name": "value_33",
+            "value": "オリジナル項目33"
+          },
+          {
+            "column_name": "value_34",
+            "value": "オリジナル項目34"
+          },
+          {
+            "column_name": "value_35",
+            "value": "オリジナル項目35"
+          },
+          {
+            "column_name": "value_36",
+            "value": "オリジナル項目36"
+          },
+          {
+            "column_name": "value_37",
+            "value": "オリジナル項目37"
+          },
+          {
+            "column_name": "value_38",
+            "value": "オリジナル項目38"
+          },
+          {
+            "column_name": "value_39",
+            "value": "オリジナル項目39"
+          },
+          {
+            "column_name": "value_40",
+            "value": "オリジナル項目40"
+          },
+          {
+            "column_name": "value_41",
+            "value": "オリジナル項目41"
+          },
+          {
+            "column_name": "value_42",
+            "value": "オリジナル項目42"
+          },
+          {
+            "column_name": "value_43",
+            "value": "オリジナル項目43"
+          },
+          {
+            "column_name": "value_44",
+            "value": "オリジナル項目44"
+          },
+          {
+            "column_name": "value_45",
+            "value": "オリジナル項目45"
+          },
+          {
+            "column_name": "value_46",
+            "value": "オリジナル項目46"
+          },
+          {
+            "column_name": "value_47",
+            "value": "オリジナル項目47"
+          },
+          {
+            "column_name": "value_48",
+            "value": "オリジナル項目48"
+          },
+          {
+            "column_name": "value_49",
+            "value": "オリジナル項目49"
+          },
+          {
+            "column_name": "value_50",
+            "value": "オリジナル項目50"
+          }
+        ],
+        "minItems": 0,
+        "maxItems": 50
+      },
+      "Customer_original_values": {
+        "type": "array",
+        "description": "オリジナル項目(お客様情報)　\nオリジナル項目配列が存在しない場合は更新しない",
+        "items": {
+          "properties": {
+            "column_name": {
+              "type": "string",
+              "description": "項目ID　\n「value_1」 ~ 「value_50」のいずれか。\n存在しない項目IDは更新しない。"
+            },
+            "value": {
+              "type": "string",
+              "description": "オリジナル項目の値　プレイス設定画面で項目設定したデータ型であること。\"\"（空文字）の場合は値をクリアする。入力必須のチェックは行わない。"
+            }
+          }
+        },
+        "example": [
+          {
+            "column_name": "value_1",
+            "value": "オリジナル項目1"
+          },
+          {
+            "column_name": "value_2",
+            "value": "オリジナル項目2"
+          },
+          {
+            "column_name": "value_3",
+            "value": "オリジナル項目3"
+          },
+          {
+            "column_name": "value_4",
+            "value": "オリジナル項目4"
+          },
+          {
+            "column_name": "value_5",
+            "value": "オリジナル項目5"
+          },
+          {
+            "column_name": "value_6",
+            "value": "オリジナル項目6"
+          },
+          {
+            "column_name": "value_7",
+            "value": "オリジナル項目7"
+          },
+          {
+            "column_name": "value_8",
+            "value": "オリジナル項目8"
+          },
+          {
+            "column_name": "value_9",
+            "value": "オリジナル項目9"
+          },
+          {
+            "column_name": "value_10",
+            "value": "オリジナル項目10"
+          },
+          {
+            "column_name": "value_11",
+            "value": "オリジナル項目11"
+          },
+          {
+            "column_name": "value_12",
+            "value": "オリジナル項目12"
+          },
+          {
+            "column_name": "value_13",
+            "value": "オリジナル項目13"
+          },
+          {
+            "column_name": "value_14",
+            "value": "オリジナル項目14"
+          },
+          {
+            "column_name": "value_15",
+            "value": "オリジナル項目15"
+          },
+          {
+            "column_name": "value_16",
+            "value": "オリジナル項目16"
+          },
+          {
+            "column_name": "value_17",
+            "value": "オリジナル項目17"
+          },
+          {
+            "column_name": "value_18",
+            "value": "オリジナル項目18"
+          },
+          {
+            "column_name": "value_19",
+            "value": "オリジナル項目19"
+          },
+          {
+            "column_name": "value_20",
+            "value": "オリジナル項目20"
+          },
+          {
+            "column_name": "value_21",
+            "value": "オリジナル項目21"
+          },
+          {
+            "column_name": "value_22",
+            "value": "オリジナル項目22"
+          },
+          {
+            "column_name": "value_23",
+            "value": "オリジナル項目23"
+          },
+          {
+            "column_name": "value_24",
+            "value": "オリジナル項目24"
+          },
+          {
+            "column_name": "value_25",
+            "value": "オリジナル項目25"
+          },
+          {
+            "column_name": "value_26",
+            "value": "オリジナル項目26"
+          },
+          {
+            "column_name": "value_27",
+            "value": "オリジナル項目27"
+          },
+          {
+            "column_name": "value_28",
+            "value": "オリジナル項目28"
+          },
+          {
+            "column_name": "value_29",
+            "value": "オリジナル項目29"
+          },
+          {
+            "column_name": "value_30",
+            "value": "オリジナル項目30"
+          },
+          {
+            "column_name": "value_31",
+            "value": "オリジナル項目31"
+          },
+          {
+            "column_name": "value_32",
+            "value": "オリジナル項目32"
+          },
+          {
+            "column_name": "value_33",
+            "value": "オリジナル項目33"
+          },
+          {
+            "column_name": "value_34",
+            "value": "オリジナル項目34"
+          },
+          {
+            "column_name": "value_35",
+            "value": "オリジナル項目35"
+          },
+          {
+            "column_name": "value_36",
+            "value": "オリジナル項目36"
+          },
+          {
+            "column_name": "value_37",
+            "value": "オリジナル項目37"
+          },
+          {
+            "column_name": "value_38",
+            "value": "オリジナル項目38"
+          },
+          {
+            "column_name": "value_39",
+            "value": "オリジナル項目39"
+          },
+          {
+            "column_name": "value_40",
+            "value": "オリジナル項目40"
+          },
+          {
+            "column_name": "value_41",
+            "value": "オリジナル項目41"
+          },
+          {
+            "column_name": "value_42",
+            "value": "オリジナル項目42"
+          },
+          {
+            "column_name": "value_43",
+            "value": "オリジナル項目43"
+          },
+          {
+            "column_name": "value_44",
+            "value": "オリジナル項目44"
+          },
+          {
+            "column_name": "value_45",
+            "value": "オリジナル項目45"
+          },
+          {
+            "column_name": "value_46",
+            "value": "オリジナル項目46"
+          },
+          {
+            "column_name": "value_47",
+            "value": "オリジナル項目47"
+          },
+          {
+            "column_name": "value_48",
+            "value": "オリジナル項目48"
+          },
+          {
+            "column_name": "value_49",
+            "value": "オリジナル項目49"
+          },
+          {
+            "column_name": "value_50",
+            "value": "オリジナル項目50"
+          }
+        ],
+        "minItems": 0,
+        "maxItems": 50
+      },
+      "Customer_original_values_response": {
+        "type": "array",
+        "description": "オリジナル項目(お客様情報)　値が入っているかに関わらずvalue1~50全ての項目を配列で返却する",
+        "items": {
+          "properties": {
+            "column_name": {
+              "type": "string",
+              "description": "項目ID　\n「value_1」 ~ 「value_50」のいずれか。"
+            },
+            "value": {
+              "type": "string",
+              "description": "オリジナル項目の値　日付、数値の場合もStringとして返却する"
+            }
+          }
+        },
+        "example": [
+          {
+            "column_name": "value_1",
+            "value": "オリジナル項目1"
+          },
+          {
+            "column_name": "value_2",
+            "value": "オリジナル項目2"
+          },
+          {
+            "column_name": "value_3",
+            "value": "オリジナル項目3"
+          },
+          {
+            "column_name": "value_4",
+            "value": "オリジナル項目4"
+          },
+          {
+            "column_name": "value_5",
+            "value": "オリジナル項目5"
+          },
+          {
+            "column_name": "value_6",
+            "value": "オリジナル項目6"
+          },
+          {
+            "column_name": "value_7",
+            "value": "オリジナル項目7"
+          },
+          {
+            "column_name": "value_8",
+            "value": "オリジナル項目8"
+          },
+          {
+            "column_name": "value_9",
+            "value": "オリジナル項目9"
+          },
+          {
+            "column_name": "value_10",
+            "value": "オリジナル項目10"
+          },
+          {
+            "column_name": "value_11",
+            "value": "オリジナル項目11"
+          },
+          {
+            "column_name": "value_12",
+            "value": "オリジナル項目12"
+          },
+          {
+            "column_name": "value_13",
+            "value": "オリジナル項目13"
+          },
+          {
+            "column_name": "value_14",
+            "value": "オリジナル項目14"
+          },
+          {
+            "column_name": "value_15",
+            "value": "オリジナル項目15"
+          },
+          {
+            "column_name": "value_16",
+            "value": "オリジナル項目16"
+          },
+          {
+            "column_name": "value_17",
+            "value": "オリジナル項目17"
+          },
+          {
+            "column_name": "value_18",
+            "value": "オリジナル項目18"
+          },
+          {
+            "column_name": "value_19",
+            "value": "オリジナル項目19"
+          },
+          {
+            "column_name": "value_20",
+            "value": "オリジナル項目20"
+          },
+          {
+            "column_name": "value_21",
+            "value": "オリジナル項目21"
+          },
+          {
+            "column_name": "value_22",
+            "value": "オリジナル項目22"
+          },
+          {
+            "column_name": "value_23",
+            "value": "オリジナル項目23"
+          },
+          {
+            "column_name": "value_24",
+            "value": "オリジナル項目24"
+          },
+          {
+            "column_name": "value_25",
+            "value": "オリジナル項目25"
+          },
+          {
+            "column_name": "value_26",
+            "value": "オリジナル項目26"
+          },
+          {
+            "column_name": "value_27",
+            "value": "オリジナル項目27"
+          },
+          {
+            "column_name": "value_28",
+            "value": "オリジナル項目28"
+          },
+          {
+            "column_name": "value_29",
+            "value": "オリジナル項目29"
+          },
+          {
+            "column_name": "value_30",
+            "value": "オリジナル項目30"
+          },
+          {
+            "column_name": "value_31",
+            "value": "オリジナル項目31"
+          },
+          {
+            "column_name": "value_32",
+            "value": "オリジナル項目32"
+          },
+          {
+            "column_name": "value_33",
+            "value": "オリジナル項目33"
+          },
+          {
+            "column_name": "value_34",
+            "value": "オリジナル項目34"
+          },
+          {
+            "column_name": "value_35",
+            "value": "オリジナル項目35"
+          },
+          {
+            "column_name": "value_36",
+            "value": "オリジナル項目36"
+          },
+          {
+            "column_name": "value_37",
+            "value": "オリジナル項目37"
+          },
+          {
+            "column_name": "value_38",
+            "value": "オリジナル項目38"
+          },
+          {
+            "column_name": "value_39",
+            "value": "オリジナル項目39"
+          },
+          {
+            "column_name": "value_40",
+            "value": "オリジナル項目40"
+          },
+          {
+            "column_name": "value_41",
+            "value": "オリジナル項目41"
+          },
+          {
+            "column_name": "value_42",
+            "value": "オリジナル項目42"
+          },
+          {
+            "column_name": "value_43",
+            "value": "オリジナル項目43"
+          },
+          {
+            "column_name": "value_44",
+            "value": "オリジナル項目44"
+          },
+          {
+            "column_name": "value_45",
+            "value": "オリジナル項目45"
+          },
+          {
+            "column_name": "value_46",
+            "value": "オリジナル項目46"
+          },
+          {
+            "column_name": "value_47",
+            "value": "オリジナル項目47"
+          },
+          {
+            "column_name": "value_48",
+            "value": "オリジナル項目48"
+          },
+          {
+            "column_name": "value_49",
+            "value": "オリジナル項目49"
+          },
+          {
+            "column_name": "value_50",
+            "value": "オリジナル項目50"
+          }
+        ],
+        "minItems": 0,
+        "maxItems": 50
+      },
+      "Order_info": {
+        "type": "object",
+        "properties": {
+          "construction_name": {
+            "description": "工事名",
+            "type": "string",
+            "example": "ダンドリ邸リフォーム"
+          },
+          "order_tax": {
+            "description": "税率 *%入力\n<br>空の場合はDW側のデフォルトの税率(10%)を反映",
+            "type": "number",
+            "format": "integer",
+            "example": 10
+          },
+          "partner": {
+            "description": "受注会社\n<br>*設定されている企業と一致する協力業者を設定する\n<br>*協力業者が見つからない場合はnullで登録",
+            "type": "string",
+            "example": "ダンドリ工務店"
+          },
+          "order_date": {
+            "description": "受注日\n<br>注文ステータスが200以外の場合は必須",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "YYYY-MM-DD hh:mm:ss",
+            "example": "2019-01-01 12:00:00"
+          },
+          "end_date": {
+            "description": "完了日\n<br>注文ステータス204の場合は必須",
+            "type": "string",
+            "format": "date-time",
+            "pattern": "YYYY-MM-DD hh:mm:ss",
+            "example": "2019-02-01 12:00:00"
+          },
+          "order_type": {
+            "description": "発注区分\n<br>10:本体発注 20:追加発注 30:その他\n<br>*オプション利用プレイスのみ",
+            "type": "number",
+            "format": "integer",
+            "example": 10
+          },
+          "order_price": {
+            "description": "初期発注金額\n<br>*オプション利用プレイスのみ",
+            "type": "number",
+            "format": "float",
+            "example": 2750000
+          },
+          "estimated_price": {
+            "description": "見積金額\n<br>*オプション利用プレイスのみ",
+            "type": "number",
+            "format": "float",
+            "example": 2750000
+          },
+          "estimated_tax": {
+            "description": "税率 *%入力\n<br>空の場合はDW側のデフォルトの税率(10%)を反映",
+            "type": "number",
+            "format": "integer",
+            "example": 10
+          },
+          "status": {
+            "description": "注文ステータス\n<br>200: 発注作成中 103: 請負承認待ち 202: 工事完了待ち 105: 最終確認待ち 204: 工事完了\n<br>編集があった場合ステータス200となる",
+            "type": "number",
+            "format": "integer",
+            "example": 200
+          },
+          "order_details": {
+            "type": "array",
+            "items": {
+              "properties": {
+                "order_detail_code": {
+                  "description": "明細コード\n<br>任意の値を登録\n<br>ダンドリワーク発注書内で重複不可\n<br>指定したコードが存在しなければ登録/存在していれば編集\n<br>注文ステータスが204の場合編集不可",
+                  "type": "string",
+                  "example": "detail_1"
+                },
+                "item_name": {
+                  "description": "工事内容",
+                  "type": "string",
+                  "example": "壁紙工事"
+                },
+                "item_quantity": {
+                  "description": "数量",
+                  "type": "number",
+                  "format": "float",
+                  "example": 1
+                },
+                "item_unit": {
+                  "description": "単位\n<br>*登録されている単位名と一致する単位を設定する",
+                  "type": "string",
+                  "example": "個"
+                },
+                "item_price": {
+                  "description": "単価",
+                  "type": "number",
+                  "format": "float",
+                  "example": 25000
+                },
+                "item_amount": {
+                  "description": "単価と数量の合計\n<br>*空の場合は自動計算\n<br>*端数処理はDWの端数設定に基づく",
+                  "type": "number",
+                  "format": "float",
+                  "example": 25000
+                },
+                "item_tax": {
+                  "description": "税額\n<br>*空の場合はorder_taxを参照し自動計算\n<br>*端数処理はDWの端数設定に基づく",
+                  "type": "number",
+                  "format": "float",
+                  "example": 10
+                },
+                "price": {
+                  "description": "税込み金額\n<br>*空の場合はitem_amountとitem_taxを参照し自動計算",
+                  "type": "number",
+                  "format": "float",
+                  "example": 27500
+                },
+                "item_delivery_address": {
+                  "description": "配送先",
+                  "type": "string",
+                  "example": "滋賀県草津市南草津２丁目１−７"
+                },
+                "item_delivery_date_prefer": {
+                  "description": "配送希望日",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "YYYY-MM-DD hh:mm:ss",
+                  "example": "2019-01-01 13:00:00"
+                },
+                "comment": {
+                  "description": "コメント",
+                  "type": "string",
+                  "example": "配送は天地無用。見積もりの通り。"
+                }
+              },
+              "required": [
+                "order_detail_code",
+                "item_name",
+                "item_quantity",
+                "item_unit",
+                "item_price",
+                "item_amount",
+                "item_tax",
+                "price"
+              ]
+            }
+          }
+        },
+        "required": [
+          "construction_name"
+        ]
+      },
+      "SiteSchedule": {
+        "type": "object",
+        "properties": {
+          "schedules": {
+            "description": "工事",
+            "type": "array",
+            "items": {
+              "properties": {
+                "code": {
+                  "description": "工事コード",
+                  "type": "string",
+                  "example": "schecode"
+                },
+                "name": {
+                  "description": "工事名称",
+                  "type": "string",
+                  "example": "内装工事"
+                },
+                "tag": {
+                  "description": "業種",
+                  "type": "string",
+                  "example": "電気"
+                },
+                "terms": {
+                  "description": "工事(第n工期)",
+                  "type": "array",
+                  "items": {
+                    "properties": {
+                      "start_date": {
+                        "description": "開始日",
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "YYYY-MM-DD",
+                        "example": "2020-01-11"
+                      },
+                      "end_date": {
+                        "description": "終了日",
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "YYYY-MM-DD",
+                        "example": "2020-01-12"
+                      },
+                      "is_all_day": {
+                        "description": "終日区分\n<br>0:終日 / 1:時間指定",
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "start_at": {
+                        "description": "開始時刻\n<br>is_all_dayが1の場合のみ出力",
+                        "type": "string",
+                        "format": "time",
+                        "pattern": "hh:mm",
+                        "example": "09:00"
+                      },
+                      "end_at": {
+                        "description": "終了時刻\n<br>is_all_dayが1の場合のみ出力",
+                        "type": "string",
+                        "format": "time",
+                        "pattern": "hh:mm",
+                        "example": "12:00"
+                      },
+                      "memo": {
+                        "description": "コメント",
+                        "type": "string",
+                        "example": "第2工期です"
+                      }
+                    }
+                  }
+                },
+                "partners": {
+                  "description": "工事の担当企業（複数）",
+                  "type": "array",
+                  "items": {
+                    "properties": {
+                      "partner": {
+                        "description": "企業名",
+                        "type": "string",
+                        "example": "株式会社ダンドリ工務店"
+                      }
+                    }
+                  }
+                },
+                "crews": {
+                  "description": "工事の担当者（複数）",
+                  "type": "array",
+                  "items": {
+                    "properties": {
+                      "crew": {
+                        "description": "ユーザーコード\n<br>プレイス設定のユーザー画面から指定できる半角英数字\n<br>※未入力の場合は「null」を出力し、「担当者は登録されているがユーザーコードは未登録」であることを知らせる",
+                        "type": "string",
+                        "example": "user_code_01"
+                      }
+                    }
+                  }
+                },
+                "holiday": {
+                  "description": "休日設定",
+                  "type": "array",
+                  "items": {
+                    "properties": {
+                      "change_due_date": {
+                        "description": "休日分工期を伸ばすかの設定\n<br>0:休日分工期を伸ばさない / 1:休日分工期を伸ばす",
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "public_holiday": {
+                        "description": "祝祭日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "sunday": {
+                        "description": "日曜日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 1
+                      },
+                      "monday": {
+                        "description": "月曜日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 0
+                      },
+                      "tuesday": {
+                        "description": "火曜日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 0
+                      },
+                      "wednesday": {
+                        "description": "水曜日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 0
+                      },
+                      "thursday": {
+                        "description": "木曜日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 0
+                      },
+                      "friday": {
+                        "description": "金曜日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 0
+                      },
+                      "saturday": {
+                        "description": "土曜日\n<br>0:休日としない / 1:休日",
+                        "type": "integer",
+                        "example": 0
+                      }
+                    }
+                  }
+                },
+                "color": {
+                  "description": "ガントチャートの色\n<br>1:水色(デフォルト値),\n<br>2:黒,3:緑,4:薄緑,5:橙色,6:山吹色,\n<br>7:赤,8:桃色,9:紫,10:青,11:灰色",
+                  "type": "integer",
+                  "example": 1
+                },
+                "detail": {
+                  "description": "詳細",
+                  "type": "string",
+                  "example": "工事の詳細指示を記載。"
+                },
+                "confirm_status": {
+                  "description": "工事の確定状況\n<br>1:未定(デフォルト値) / 2:確定",
+                  "type": "integer",
+                  "example": 1
+                },
+                "status": {
+                  "description": "工事の状況\n<br>−1:工程表作成中,\n<br>0:未対応(デフォルト値),\n<br>1:対応中,2:対応済み,3:完了",
+                  "type": "integer",
+                  "example": 0
+                },
+                "created": {
+                  "description": "登録日",
+                  "type": "string",
+                  "format": "datetime",
+                  "pattern": "YYYY-MM-DD hh:mm:ss",
+                  "example": "2019-01-09 12:00:00"
+                },
+                "modified": {
+                  "description": "更新日",
+                  "type": "string",
+                  "format": "datetime",
+                  "pattern": "YYYY-MM-DD hh:mm:ss",
+                  "example": "2019-01-10 12:00:00"
+                }
+              }
+            }
+          },
+          "milestones": {
+            "description": "マイルストーン",
+            "type": "array",
+            "items": {
+              "properties": {
+                "name": {
+                  "description": "マイルストーン名",
+                  "type": "string",
+                  "example": "milestone_name1"
+                },
+                "date": {
+                  "description": "期限",
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "YYYY-MM-DD",
+                  "example": "2018-10-12"
+                }
+              }
+            }
+          },
+          "url": {
+            "description": "現場工程表のガントチャート画面URL",
+            "type": "string",
+            "example": "https://www.dandoli.jp/dandoli-works/sites/123456789/schedules-v2"
+          }
+        }
+      },
+      "TalkSiteTalkRoom": {
+        "type": "object",
+        "properties": {
+          "site": {
+            "$ref": "#/components/schemas/site"
+          },
+          "company": {
+            "$ref": "#/components/schemas/company"
+          }
+        }
+      },
+      "site": {
+        "type": "object",
+        "properties": {
+          "place_id": {
+            "type": "int",
+            "example": "123",
+            "description": "プレイスID"
+          },
+          "site_id": {
+            "type": "int",
+            "example": "123456",
+            "description": "現場ID"
+          },
+          "talk_room_id": {
+            "type": "string",
+            "example": "c85348c0-ac3f-12ea-9c08-5310a49d2ac7",
+            "description": "トークルームID"
+          },
+          "manager": {
+            "type": "int",
+            "example": "123456",
+            "description": "管理者"
+          },
+          "description": {
+            "type": "string",
+            "example": "トークルームの説明を記載する。",
+            "description": "ここにトークルームの説明等を記載する。"
+          },
+          "created": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD HH:mm:ss",
+            "example": "2020-06-12 10:55:25",
+            "description": "作成日"
+          },
+          "created_user_id": {
+            "type": "int",
+            "example": "123456",
+            "description": "トークルーム作成者ID"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD HH:mm:ss",
+            "example": "2020-06-12 10:55:25",
+            "description": "修正日"
+          },
+          "modified_user_id": {
+            "type": "int",
+            "example": "123456",
+            "description": "トークルーム修正者ID"
+          }
+        }
+      },
+      "company": {
+        "type": "object",
+        "properties": {
+          "place_id": {
+            "type": "int",
+            "example": "123",
+            "description": "プレイスID"
+          },
+          "site_id": {
+            "type": "int",
+            "example": "123456",
+            "description": "現場ID"
+          },
+          "talk_room_id": {
+            "type": "string",
+            "example": "c85348c0-ac3f-12ea-9c08-5310a49d2ac7",
+            "description": "トークルームID"
+          },
+          "manager": {
+            "type": "int",
+            "example": "123456",
+            "description": "管理者"
+          },
+          "description": {
+            "type": "string",
+            "example": "トークルームの説明を記載する。",
+            "description": "ここにトークルームの説明等を記載する。"
+          },
+          "created": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD HH:mm:ss",
+            "example": "2020-06-12 10:55:25",
+            "description": "作成日"
+          },
+          "created_user_id": {
+            "type": "int",
+            "example": "123456",
+            "description": "トークルーム作成者ID"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date",
+            "pattern": "YYYY-MM-DD HH:mm:ss",
+            "example": "2020-06-12 10:55:25",
+            "description": "修正日"
+          },
+          "modified_user_id": {
+            "type": "int",
+            "example": "123456",
+            "description": "トークルーム修正者ID"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Bearer 認証トークン 認証トークンは固定値とし、ダンドリワーク側で振り出し、連絡する。"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.dandoli.jp/api",
+      "description": "本番環境"
+    }
+  ]
+}

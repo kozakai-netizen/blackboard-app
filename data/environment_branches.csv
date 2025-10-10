@@ -1,0 +1,5 @@
+環境名,サービス,環境種別,リポジトリ,デプロイ用ブランチ,概要,プログラムバージョン,linuxシステム,ECS,接続DB1,接続DB2,リリース方法,使用者,用途
+Time本番,time,本番,dandoli-time,master,timeの本番環境,php7.2,amazon linux2,N,pro-dandoli-time-db,pro-dandolijp-log02,プログラム修正してデプロイ,ー,
+Time検証,time,STG,dandoli-time,作業ブランチ等,timeのSTG環境,php7.2,amazon linux2,N,stg-time-db.dandoli.jp,,プログラム修正してデプロイ,ー,
+同期ツール本番,sync,本番,shin-sync-work-to-time,master,同期ツールの本番環境,php7.2,amazon linux2,N,pro-dandolijp-db-work,pro-dandoli-time-db,プログラム修正してデプロイ,ー,CSがTimeにデータを登録するときに使用します
+同期ツール検証,sync,STG,shin-sync-work-to-time,作業ブランチ等,同期ツールのSTG環境,php7.2,amazon linux2,N,stg-work-db.dandoli.jp,,プログラム修正してデプロイ,ー,

@@ -407,10 +407,11 @@ export function BlackboardForm({
           <button
             type="submit"
             disabled={disabled}
-            className="w-full py-4 px-6 bg-green-600 text-white rounded-lg
-                       hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed
-                       font-bold text-lg transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-base transition-colors shadow-sm"
           >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             登録する
           </button>
         </div>

@@ -16,10 +16,15 @@ export default function UsersAdminPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
 
   // ユーザー一覧を取得
   useEffect(() => {
     loadUsers();
+    const logo = localStorage.getItem('companyLogo');
+    if (logo) {
+      setCompanyLogo(logo);
+    }
   }, []);
 
   const loadUsers = async () => {
@@ -113,21 +118,35 @@ export default function UsersAdminPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* ヘッダー */}
-        <div className="mb-6">
-          <button
-            onClick={() => router.push('/admin')}
-            className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2"
-          >
-            ← 管理画面に戻る
-          </button>
-          <h1 className="text-3xl font-bold text-gray-900">ユーザー管理</h1>
-          <p className="mt-2 text-gray-600">
-            ダンドリワークAPIからユーザー情報を同期します
-          </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* ヘッダー - 現場一覧と統一 */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center gap-4">
+            {companyLogo && (
+              <button
+                onClick={() => window.location.href = '/sites'}
+                className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                title="現場一覧に戻る"
+              >
+                <img
+                  src={companyLogo}
+                  alt="Company Logo"
+                  className="h-16 w-16 object-contain"
+                />
+              </button>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">👥 ユーザー管理</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                ダンドリワークAPIからユーザー情報を同期します
+              </p>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-6">
 
         {/* インポート・同期ボタン */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">

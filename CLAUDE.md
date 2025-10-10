@@ -1155,15 +1155,80 @@ if (selectedManager) {
 - 現場種類バッジ視認性向上
 - 複数ステータス選択機能（デフォルト1,2,3選択）
 
+#### 9. アップロード画面UI改善（✅完了）
+**実装場所**: `/app/upload/page.tsx`
+
+**変更内容**:
+- ヘッダーから「一括登録モード」文言削除
+- 独立した「黒板テンプレート」セクション削除
+- テンプレート選択を「黒板情報入力」セクション内に統合
+- 「全〇枚に適用」文言削除
+- 「プレビュー」タイトル削除（「黒板をドラッグで位置調整」を表示）
+- 「モード選択に戻る」ボタン削除
+- レイアウト最適化でスッキリしたデザインに
+
+**変更ファイル**: `app/upload/page.tsx`, `components/BlackboardPreview.tsx`
+
+### 変更ファイル一覧
+
+#### 修正（Day 10全体）
+- `app/sites/page.tsx` - ロゴアップロード、ソート機能、モーダル、複数選択
+- `components/SiteCard.tsx` - border色修正、種類バッジ改善
+- `components/SiteTable.tsx` - 行クリック、ステータス色統一、UI改善
+- `app/upload/page.tsx` - UI改善、テンプレート統合、不要文言削除
+- `components/BlackboardPreview.tsx` - ドラッグ機能修正
+
 ### 最終更新
 - 日時: 2025-10-10
-- 状態: Day 10完了 - 現場一覧UI大幅改善完了
+- 状態: Day 10完了 - 現場一覧UI大幅改善 + アップロード画面UI改善完了
 - 次回タスク: Day 11へ進む
+
+---
+
+## 既知の課題・保留事項
+
+### 1. 黒板プレビュー表示問題（保留）
+**問題**:
+1. テンプレート切り替え時に黒板サイズが異常に大きくなる
+2. フィールド数が多いテンプレートで文字が潰れる
+3. 黒板高さ計算ロジックが不安定
+
+**原因**:
+- `Math.max(designSettings.height, minHeightPercent)` で計算された高さが大きくなりすぎる
+- フォントサイズが黒板高さに依存しているため、高さが変わると文字サイズも崩れる
+
+**解決案**:
+- フォントサイズを黒板の幅ベースに変更
+- 高さ計算ロジックを見直し
+
+**優先度**: 中（後日対応）
+
+### 2. 現場カードの担当者名が表示されない問題（未解決）
+**問題**:
+- 現場一覧のカード表示で、担当者名が表示されない
+- APIレスポンスには`site.manager.admin`にユーザーID（例: "12345678"）が入っている
+- usersテーブルでID→名前の変換を試みたが表示されない
+
+**実装済み**:
+```typescript
+// app/sites/page.tsx (164-166行目)
+const managerUserId = site.manager?.admin || site.manager?.sub_admin1 || site.manager?.sub_admin2 || site.manager?.sub_admin3
+const managerUser = managerUserId ? usersResult.data?.find(u => u.user_id === managerUserId) : null
+const managerName = managerUser?.name || ''
+```
+
+**確認事項**:
+1. usersテーブルにuser_id="12345678"のレコードが存在するか
+2. `usersResult.data`が正しく読み込まれているか（コンソールログで確認）
+3. user_idのデータ型が一致しているか（string vs number）
+
+**優先度**: 高（次回対応）
 
 ---
 
 ## 今後の開発予定
 - [ ] 黒板レイアウトパターン実装（12種類）
 - [ ] 写真アップロード機能の完成
+- [ ] 黒板プレビュー表示問題の解決（保留中）
 - [ ] 実環境テスト
 - [ ] J-COMSIA認定申請

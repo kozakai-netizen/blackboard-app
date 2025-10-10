@@ -5,13 +5,21 @@ import type { BlackboardInfo, BlackboardData, Template } from '@/types';
  * BlackboardInfoをBlackboardDataに変換
  */
 export function blackboardInfoToData(info: BlackboardInfo): Partial<BlackboardData> {
+  // 日時を「YYYY/MM/DD HH:MM」形式で表示（国交省準拠）
+  const year = info.timestamp.getFullYear();
+  const month = String(info.timestamp.getMonth() + 1).padStart(2, '0');
+  const day = String(info.timestamp.getDate()).padStart(2, '0');
+  const hours = String(info.timestamp.getHours()).padStart(2, '0');
+  const minutes = String(info.timestamp.getMinutes()).padStart(2, '0');
+  const dateTimeString = `${year}/${month}/${day} ${hours}:${minutes}`;
+
   return {
     工事名: info.projectName,
     工種: info.workType,
     天候: info.weather,
     種別: info.workCategory,
     細別: info.workDetail,
-    撮影日: info.timestamp.toLocaleDateString('ja-JP'),
+    撮影日: dateTimeString,
     施工者: info.contractor || '',
     撮影場所: info.location,
     測点位置: info.station,

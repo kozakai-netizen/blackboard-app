@@ -8,6 +8,7 @@ interface FileSelectorProps {
   maxFiles?: number;
   disabled?: boolean;
   currentFileCount?: number;
+  hideButton?: boolean;
 }
 
 export interface FileSelectorRef {
@@ -18,7 +19,8 @@ export const FileSelector = forwardRef<FileSelectorRef, FileSelectorProps>(({
   onFilesSelected,
   maxFiles = 50,
   disabled = false,
-  currentFileCount = 0
+  currentFileCount = 0,
+  hideButton = false
 }, ref) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,16 +65,19 @@ export const FileSelector = forwardRef<FileSelectorRef, FileSelectorProps>(({
         className="hidden"
       />
 
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={disabled}
-        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg
-                   hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed
-                   font-semibold text-sm transition-colors inline-flex items-center gap-2"
-      >
-        📷 写真を追加
-      </button>
+      {!hideButton && (
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={disabled}
+          className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          写真を追加
+        </button>
+      )}
     </div>
   );
 });

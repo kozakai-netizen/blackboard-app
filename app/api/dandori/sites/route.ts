@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const placeCode = searchParams.get('place_code');
+    const siteStatus = searchParams.get('site_status') || '1,2,3'; // デフォルト: 追客中、契約中、着工中
 
     if (!placeCode) {
       return NextResponse.json(
@@ -16,7 +17,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const url = `${DW_API_BASE}/co/places/${placeCode}/sites`;
+    // site_statusパラメータを追加
+    const url = `${DW_API_BASE}/co/places/${placeCode}/sites?site_status=${siteStatus}`;
+    console.log('📍 Fetching sites with status:', siteStatus);
+
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${BEARER_TOKEN}`

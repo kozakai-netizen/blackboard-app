@@ -15,7 +15,7 @@ import { UploadProgressToast, UploadProgressModal } from '@/components/UploadPro
 import { processImages, processImage } from '@/lib/canvas';
 import { uploadPhotosInChunks } from '@/lib/dandori-api';
 import { saveManifest } from '@/lib/supabase';
-import { getAllTemplates, getDefaultTemplate, updateTemplate } from '@/lib/templates';
+import { getAllTemplates, getDefaultTemplate, updateTemplate, incrementTemplateUsage } from '@/lib/templates';
 import { TemplateSelector } from '@/components/TemplateSelector';
 import type { BlackboardInfo, UploadProgress, Manifest, Template } from '@/types';
 
@@ -51,9 +51,19 @@ function UploadPageContent() {
     projectName: '',
     timestamp: new Date()
   });
-  const [mode, setMode] = useState<'selection' | 'batch' | 'individual'>('selection');
+  const [mode, setMode] = useState<'selection' | 'batch' | 'individual'>('batch');
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [currentPreviewIndex, setCurrentPreviewIndex] = useState(0);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+
+  // 会社ロゴをLocalStorageから読み込み
+  useEffect(() => {
+    const logo = localStorage.getItem('companyLogo');
+    if (logo) {
+      setCompanyLogo(logo);
+    }
+  }, []);
 
   // テンプレートを取得
   useEffect(() => {
@@ -87,22 +97,23 @@ function UploadPageContent() {
       setPreviewBlackboardInfo(prev => {
         const newInfo: BlackboardInfo = {
           ...prev,
-          projectName: projectName || prev.projectName,
-          workType: (defaultValues.工種 as string) || undefined,
-          weather: (defaultValues.天候 as string) || undefined,
-          workCategory: (defaultValues.種別 as string) || undefined,
-          workDetail: (defaultValues.細別 as string) || undefined,
-          contractor: (defaultValues.施工者 as string) || undefined,
-          location: (defaultValues.撮影場所 as string) || undefined,
-          station: (defaultValues.測点位置 as string) || undefined,
-          witness: (defaultValues.立会者 as string) || undefined,
-          remarks: (defaultValues.備考 as string) || undefined,
+          // projectNameは現在の値を保持（上書きしない）
+          projectName: prev.projectName || projectName,
+          workType: (defaultValues.工種 as string) || prev.workType,
+          weather: (defaultValues.天候 as string) || prev.weather,
+          workCategory: (defaultValues.種別 as string) || prev.workCategory,
+          workDetail: (defaultValues.細別 as string) || prev.workDetail,
+          contractor: (defaultValues.施工者 as string) || prev.contractor,
+          location: (defaultValues.撮影場所 as string) || prev.location,
+          station: (defaultValues.測点位置 as string) || prev.station,
+          witness: (defaultValues.立会者 as string) || prev.witness,
+          remarks: (defaultValues.備考 as string) || prev.remarks,
         };
         console.log('📝 Updated blackboardInfo:', newInfo);
         return newInfo;
       });
     }
-  }, [selectedTemplate, projectName]);
+  }, [selectedTemplate?.id]); // selectedTemplate.idのみ監視
 
   // 現場写真カテゴリを取得
   useEffect(() => {
@@ -193,14 +204,15 @@ function UploadPageContent() {
     fetchSiteInfo();
   }, [placeCode, siteCode]);
 
+  // 初回のみ現場名を工事名に設定
   useEffect(() => {
-    if (projectName) {
+    if (projectName && !previewBlackboardInfo.projectName) {
       setPreviewBlackboardInfo(prev => ({
         ...prev,
         projectName: projectName
       }));
     }
-  }, [projectName]);
+  }, [projectName]); // previewBlackboardInfo.projectNameは依存配列に含めない
 
   // グローバルストアからファイルを復元
   useEffect(() => {
@@ -239,6 +251,32 @@ function UploadPageContent() {
     const newIndex = currentPreviewIndex < files.length - 1 ? currentPreviewIndex + 1 : 0;
     setCurrentPreviewIndex(newIndex);
     setPreviewFile(files[newIndex]);
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    // URLをクリーンアップ
+    const fileToRemove = files[index];
+    if (fileToRemove) {
+      const url = URL.createObjectURL(fileToRemove);
+      URL.revokeObjectURL(url);
+    }
+
+    const newFiles = files.filter((_, i) => i !== index);
+    setFiles(newFiles);
+
+    // プレビュー表示の調整
+    if (newFiles.length === 0) {
+      setPreviewFile(null);
+      setCurrentPreviewIndex(0);
+    } else if (index === currentPreviewIndex) {
+      // 削除した写真が現在のプレビュー写真の場合、次の写真を表示
+      const newIndex = index >= newFiles.length ? newFiles.length - 1 : index;
+      setCurrentPreviewIndex(newIndex);
+      setPreviewFile(newFiles[newIndex]);
+    } else if (index < currentPreviewIndex) {
+      // 削除した写真が現在のプレビュー写真より前の場合、インデックスを調整
+      setCurrentPreviewIndex(currentPreviewIndex - 1);
+    }
   };
 
   // フォーム変更ハンドラをメモ化（コールバック再生成を防ぐ）
@@ -341,6 +379,11 @@ function UploadPageContent() {
 
       await saveManifest(manifest);
 
+      // テンプレート使用回数をカウント
+      if (selectedTemplate) {
+        await incrementTemplateUsage(selectedTemplate.id);
+      }
+
       if (window.opener) {
         window.opener.postMessage({
           type: 'BLACKBOARD_COMPLETE',
@@ -427,6 +470,11 @@ function UploadPageContent() {
 
       await saveManifest(manifest);
 
+      // テンプレート使用回数をカウント
+      if (selectedTemplate) {
+        await incrementTemplateUsage(selectedTemplate.id);
+      }
+
       if (window.opener) {
         window.opener.postMessage({
           type: 'BLACKBOARD_COMPLETE',
@@ -447,91 +495,99 @@ function UploadPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-[1600px] mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
-          {/* ヘッダー */}
-          <div className="flex items-start justify-between border-b pb-3">
+    <div className="min-h-screen bg-gray-50">
+      {/* ヘッダー - 現場一覧と統一 */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center gap-4">
+            {/* 会社ロゴ - クリックでTOP画面へ */}
+            {companyLogo && (
+              <button
+                onClick={() => window.location.href = '/sites'}
+                className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                title="現場一覧に戻る"
+              >
+                <img
+                  src={companyLogo}
+                  alt="Company Logo"
+                  className="h-16 w-16 object-contain"
+                />
+              </button>
+            )}
+
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">
-                {projectName}
+              <h1 className="text-2xl font-bold text-gray-900">
+                {projectName || '現場名'}
               </h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {mode === 'individual' ? '個別設定' : '一括登録'}
+              <p className="mt-1 text-sm text-gray-600">
+                現場を選択して写真をアップロードして電子小黒板を設定できます
               </p>
             </div>
-            {!isProcessing && (
-              <FileSelector
-                ref={fileSelectorRef}
-                onFilesSelected={handleFilesSelected}
-                maxFiles={50}
-                currentFileCount={files.length}
-                disabled={isProcessing}
-              />
-            )}
           </div>
+        </div>
+      </div>
 
-          {files.length > 0 && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-              <p className="text-blue-800 font-medium">
-                ✓ {files.length}枚の写真が選択されています
-              </p>
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="space-y-4">
+          {/* Hidden file selector - triggered from preview area */}
+          <FileSelector
+            ref={fileSelectorRef}
+            onFilesSelected={handleFilesSelected}
+            maxFiles={50}
+            currentFileCount={files.length}
+            disabled={isProcessing}
+            hideButton={true}
+          />
+
+          {/* 写真未選択時の初期表示 */}
+          {files.length === 0 && !isProcessing && (
+            <div className="bg-white rounded-lg shadow p-12 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">写真を選択してください</h3>
+                <p className="text-gray-600 mb-6">
+                  写真を選択すると、黒板情報を入力して電子小黒板を設定できます
+                </p>
+                <button
+                  onClick={() => fileSelectorRef.current?.openDialog()}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  写真を追加
+                </button>
+              </div>
             </div>
           )}
 
           {files.length > 0 && !isProcessing && (
-            <div className="pt-4 border-t space-y-6">
-              {/* テンプレート選択 */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">📝 黒板テンプレート</h3>
-                {isLoadingTemplates ? (
-                  <div className="text-center py-8 bg-white rounded-lg border">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                    <p className="text-gray-600 text-sm">読み込み中...</p>
-                  </div>
-                ) : templates.length === 0 ? (
-                  <div className="text-center py-8 bg-white rounded-lg border">
-                    <p className="text-gray-600 mb-4">テンプレートが登録されていません</p>
-                    <button
-                      onClick={() => window.open('/admin/templates/new', '_blank')}
-                      className="text-blue-600 hover:text-blue-700 underline"
-                    >
-                      テンプレートを作成する
-                    </button>
-                  </div>
-                ) : (
-                  <TemplateSelector
-                    templates={templates}
-                    selectedTemplate={selectedTemplate}
-                    onSelectTemplate={setSelectedTemplate}
-                  />
-                )}
-              </div>
-
-              {mode === 'selection' && (
-                <ModeSelector
-                  onSelectMode={(selectedMode) => setMode(selectedMode)}
-                  fileCount={files.length}
-                />
-              )}
-
+            <div className="space-y-4">
               {mode === 'batch' && (
                 <div className="space-y-4">
-                  {/* 左2:右1の比率に変更 */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* 左側: プレビュー（2カラム分） */}
+                  {/* プレビュー＋フォームエリア - コンパクト化 */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* 左側: プレビューカード（2カラム分） */}
                     <div className="lg:col-span-2 space-y-3">
-                      <BlackboardPreview
-                        imageFile={previewFile}
-                        blackboardInfo={previewBlackboardInfo}
-                        template={selectedTemplate || undefined}
-                        onPreviewClick={() => setShowPreviewModal(true)}
-                        onPositionChange={onPositionChange}
-                      />
+                      <div className="bg-white rounded-lg shadow p-4">
+                        <BlackboardPreview
+                          imageFile={previewFile}
+                          blackboardInfo={previewBlackboardInfo}
+                          template={selectedTemplate || undefined}
+                          onPreviewClick={() => setShowPreviewModal(true)}
+                          onPositionChange={onPositionChange}
+                          onAddPhoto={() => fileSelectorRef.current?.openDialog()}
+                          onTemplateChange={() => setShowTemplateModal(true)}
+                        />
+                      </div>
 
-                      {/* サムネイルスライダー */}
+                      {/* サムネイルスライダー - コンパクト化 */}
                       {files.length > 1 && (
-                        <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="bg-white rounded-lg shadow p-3">
                           <div className="flex items-center gap-2">
                             {/* 前へボタン */}
                             <button
@@ -547,32 +603,50 @@ function UploadPageContent() {
                             {/* サムネイル一覧（横スクロール） */}
                             <div className="flex-1 overflow-x-auto">
                               <div className="flex gap-2 pb-2">
-                                {files.map((file, index) => (
-                                  <button
-                                    key={index}
-                                    onClick={() => handleThumbnailClick(index)}
-                                    className={`flex-shrink-0 relative transition-all ${
-                                      index === currentPreviewIndex
-                                        ? 'ring-2 ring-blue-500 scale-105'
-                                        : 'hover:ring-2 hover:ring-gray-300'
-                                    }`}
-                                  >
-                                    <Image
-                                      src={URL.createObjectURL(file)}
-                                      alt={`写真 ${index + 1}`}
-                                      width={80}
-                                      height={80}
-                                      className="w-20 h-20 object-cover rounded"
-                                    />
-                                    <div className={`absolute bottom-0 left-0 right-0 text-xs text-center py-0.5 ${
-                                      index === currentPreviewIndex
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-black/50 text-white'
-                                    }`}>
-                                      {index + 1}
+                                {files.map((file, index) => {
+                                  const uniqueKey = `${file.name}-${file.size}-${file.lastModified}-${index}`;
+                                  return (
+                                    <div
+                                      key={uniqueKey}
+                                      className="flex-shrink-0 relative group"
+                                    >
+                                      <button
+                                        onClick={() => handleThumbnailClick(index)}
+                                        className={`w-20 h-20 rounded transition-all ${
+                                          index === currentPreviewIndex
+                                            ? 'ring-2 ring-blue-500 scale-105'
+                                            : 'hover:ring-2 hover:ring-gray-300'
+                                        }`}
+                                      >
+                                        <Image
+                                          src={URL.createObjectURL(file)}
+                                          alt={`写真 ${index + 1}`}
+                                          width={80}
+                                          height={80}
+                                          className="w-20 h-20 object-cover rounded"
+                                        />
+                                        <div className={`absolute bottom-0 left-0 right-0 text-xs text-center py-0.5 rounded-b ${
+                                          index === currentPreviewIndex
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-black/50 text-white'
+                                        }`}>
+                                          {index + 1}
+                                        </div>
+                                      </button>
+                                      {/* バツ印ボタン - グループホバー時のみ表示 */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemovePhoto(index);
+                                        }}
+                                        className="absolute top-0 right-0 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all opacity-0 group-hover:opacity-100 text-sm font-bold leading-none"
+                                        title="写真を削除"
+                                      >
+                                        ×
+                                      </button>
                                     </div>
-                                  </button>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
 
@@ -596,40 +670,38 @@ function UploadPageContent() {
                       )}
                     </div>
 
-                    {/* 右側: 黒板情報入力（1カラム分） */}
-                    <div className="lg:col-span-1 flex flex-col">
-                      <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                        黒板情報を入力（全{files.length}枚に適用）
-                      </h2>
-                      <div className="flex-1">
-                        {selectedTemplate ? (
-                          <BlackboardForm
-                            key={selectedTemplate.id}
-                            projectName={projectName}
-                            onSubmit={handleSubmit}
-                            onFormChange={handleFormChange}
-                            disabled={isProcessing}
-                            allowProjectNameEdit={true}
-                            template={selectedTemplate}
-                            photoCategories={photoCategories}
-                            selectedCategory={selectedCategory}
-                            onCategoryChange={setSelectedCategory}
-                          />
-                        ) : (
-                          <div className="p-8 text-center text-gray-500">
-                            テンプレートを選択してください
-                          </div>
-                        )}
+                    {/* 右側: 黒板情報入力カード（1カラム分） - コンパクト化 */}
+                    <div className="lg:col-span-1">
+                      <div className="bg-white rounded-lg shadow p-4 sticky top-20">
+                        <h3 className="text-base font-semibold text-gray-900 mb-3">
+                          黒板情報入力
+                        </h3>
+
+
+                        <div>
+                          {selectedTemplate ? (
+                            <BlackboardForm
+                              key={selectedTemplate.id}
+                              projectName={projectName}
+                              onSubmit={handleSubmit}
+                              onFormChange={handleFormChange}
+                              disabled={isProcessing}
+                              allowProjectNameEdit={true}
+                              template={selectedTemplate}
+                              photoCategories={photoCategories}
+                              selectedCategory={selectedCategory}
+                              onCategoryChange={setSelectedCategory}
+                            />
+                          ) : (
+                            <div className="p-8 text-center text-gray-500">
+                              テンプレートを選択してください
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => setMode('selection')}
-                    className="text-gray-600 hover:text-gray-800 underline"
-                  >
-                    ← モード選択に戻る
-                  </button>
                 </div>
               )}
 
@@ -646,6 +718,7 @@ function UploadPageContent() {
         </div>
       </div>
 
+      {/* プログレス表示 */}
       <UploadProgressToast progress={progress} />
       {showModal && (
         <UploadProgressModal
@@ -659,6 +732,18 @@ function UploadPageContent() {
           }}
         />
       )}
+      {/* テンプレート選択モーダル */}
+      {showTemplateModal && templates.length > 0 && selectedTemplate && (
+        <TemplateSelector
+          templates={templates}
+          selectedTemplate={selectedTemplate}
+          onSelectTemplate={(template) => {
+            setSelectedTemplate(template);
+            setShowTemplateModal(false);
+          }}
+        />
+      )}
+
       {showPreviewModal && previewFile && (
         <PreviewModal
           imageFile={previewFile}

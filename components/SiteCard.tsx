@@ -141,19 +141,12 @@ export function SiteCard({ site, placeCode }: SiteCardProps) {
           </p>
         )}
 
-        {/* 担当者情報 */}
-        <div className="space-y-1">
-          {site.manager_name && (
-            <p className="text-xs text-gray-600">
-              👤 {site.manager_name}
-            </p>
-          )}
-          {site.sub_manager_name && (
-            <p className="text-xs text-gray-600">
-              👥 {site.sub_manager_name}
-            </p>
-          )}
-        </div>
+        {/* 現場管理担当者 */}
+        {site.manager_name && (
+          <p className="text-sm text-gray-600 mb-3">
+            👤 {site.manager_name}
+          </p>
+        )}
 
         {/* 更新日 */}
         {site.updated_at && (

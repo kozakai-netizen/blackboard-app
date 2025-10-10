@@ -11,9 +11,11 @@ interface BlackboardPreviewProps {
   template?: Template;
   onPreviewClick?: () => void;
   onPositionChange?: (position: { x: number; y: number }) => void;
+  onAddPhoto?: () => void;
+  onTemplateChange?: () => void;
 }
 
-export function BlackboardPreview({ imageFile, blackboardInfo, template, onPreviewClick, onPositionChange }: BlackboardPreviewProps) {
+export function BlackboardPreview({ imageFile, blackboardInfo, template, onPreviewClick, onPositionChange, onAddPhoto, onTemplateChange }: BlackboardPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -110,6 +112,7 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!template || !onPositionChange) return;
+    e.preventDefault();
     e.stopPropagation();
 
     const canvas = canvasRef.current;
@@ -121,20 +124,45 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
-    // 黒板の範囲内かチェック
+    // 黒板の範囲内かチェック（drawTemplateBlackboardと同じ計算ロジックを使用）
+    const fields = template.fields;
     const bbWidth = (canvas.width * template.designSettings.width) / 100;
-    const bbHeight = (canvas.height * template.designSettings.height) / 100;
+
+    // 動的高さ計算（drawTemplateBlackboardと同じロジック）
+    const baseHeight = bbWidth * 0.12;
+    const otherFields = fields.filter(f => f !== '工事名' && f !== '備考');
+    const rowCount = Math.ceil(otherFields.length / 2);
+    const gridItemHeight = bbWidth * 0.09;
+    const remarksHeight = fields.includes('備考') ? bbWidth * 0.15 : 0;
+    const gaps = bbWidth * 0.02 * (rowCount - 1 + (remarksHeight > 0 ? 1 : 0));
+
+    const calculatedHeight =
+      bbWidth * 0.05 * 2 + // 上下余白
+      baseHeight + // 工事名
+      (rowCount > 0 ? bbWidth * 0.03 : 0) +
+      rowCount * gridItemHeight +
+      gaps +
+      remarksHeight;
+
+    const minHeightPercent = (calculatedHeight / canvas.height) * 100;
+    const heightPercent = Math.max(template.designSettings.height, minHeightPercent);
+    const bbHeight = (canvas.height * heightPercent) / 100;
+
     const bbX = (canvas.width * template.designSettings.position.x) / 100;
     const bbY = (canvas.height * template.designSettings.position.y) / 100;
 
+    // 黒板内部でのクリック位置をパーセンテージで保存
     if (mouseX >= bbX && mouseX <= bbX + bbWidth && mouseY >= bbY && mouseY <= bbY + bbHeight) {
+      const offsetX = ((mouseX - bbX) / canvas.width) * 100;
+      const offsetY = ((mouseY - bbY) / canvas.height) * 100;
       setIsDragging(true);
-      setDragStart({ x: mouseX - bbX, y: mouseY - bbY });
+      setDragStart({ x: offsetX, y: offsetY });
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging || !template || !onPositionChange) return;
+    e.preventDefault();
     e.stopPropagation();
 
     const canvas = canvasRef.current;
@@ -146,8 +174,9 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
-    const newX = ((mouseX - dragStart.x) / canvas.width) * 100;
-    const newY = ((mouseY - dragStart.y) / canvas.height) * 100;
+    // マウス位置からdragStartオフセットを引いた位置が新しい黒板位置
+    const newX = (mouseX / canvas.width) * 100 - dragStart.x;
+    const newY = (mouseY / canvas.height) * 100 - dragStart.y;
 
     onPositionChange({ x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) });
   };
@@ -159,17 +188,46 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-gray-700">
-          プレビュー {onPositionChange && <span className="text-xs text-gray-500">(黒板をドラッグで位置調整)</span>}
-        </p>
-        {onPreviewClick && (
-          <button
-            onClick={onPreviewClick}
-            className="px-3 py-1 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition-colors"
-          >
-            全画面表示
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {template && onTemplateChange && (
+            <button
+              onClick={onTemplateChange}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors group"
+            >
+              <div className="flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-sm font-medium text-gray-700">テンプレート:</span>
+                <span className="text-sm font-semibold text-blue-700">{template.name}</span>
+              </div>
+              <svg className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {onAddPhoto && (
+            <button
+              onClick={onAddPhoto}
+              className="flex items-center gap-1.5 px-3 py-1 text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 rounded transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              写真を追加
+            </button>
+          )}
+          {onPreviewClick && (
+            <button
+              onClick={onPreviewClick}
+              className="px-3 py-1 text-sm bg-blue-50 hover:bg-blue-100 text-blue-600 rounded transition-colors"
+            >
+              全画面表示
+            </button>
+          )}
+        </div>
       </div>
       <div className="relative">
         <div className="bg-gray-100 rounded-lg p-4 transition-colors">
@@ -284,12 +342,12 @@ function drawTemplateBlackboard(
   const padding = bbWidth * 0.015; // 余白を半分に
   ctx.fillRect(bbX + padding, bbY + padding, bbWidth - padding * 2, bbHeight - padding * 2);
 
-  // フォントサイズ（大きく）
+  // フォントサイズ（幅ベースで計算）
   const baseFontSize = designSettings.fontSize === 'large'
-    ? Math.floor(bbHeight * 0.10) // 大きく
-    : Math.floor(bbHeight * 0.08); // 大きく
-  const labelFontSize = Math.floor(baseFontSize * 0.9); // ラベルも大きく
-  const valueFontSize = Math.floor(baseFontSize * 0.85); // 値も大きく
+    ? Math.floor(bbWidth * 0.055) // 大: 幅の5.5%
+    : Math.floor(bbWidth * 0.042); // 標準: 幅の4.2%
+  const labelFontSize = Math.floor(baseFontSize * 0.9);
+  const valueFontSize = Math.floor(baseFontSize * 0.85);
 
   ctx.fillStyle = designSettings.textColor;
   ctx.textBaseline = 'top';
