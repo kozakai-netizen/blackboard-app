@@ -713,6 +713,77 @@ CREATE TABLE templates (
 );
 ```
 
+## ダンドリワークAPI仕様
+
+### 主要エンドポイント
+
+#### 1. 現場一覧取得
+```
+GET /co/places/{place_code}/sites
+```
+**パラメータ**:
+- `site_status`: 現場ステータス (1:追客中, 2:契約中, 3:着工中, 4:完工, 5:中止, 6:他決)
+- `site_type`: 現場種類コード
+- `create_date_from/to`: 作成日範囲
+- `update_date_from/to`: 更新日範囲
+
+#### 2. 現場参加者取得 ⭐重要
+```
+GET /co/places/{place_code}/sites/{site_code}/site_crews
+```
+**レスポンス**:
+- `casts[]`: 役割担当者 (cast_name, cast=user_code)
+- `workers[]`: 現場参加ユーザー (worker=user_code)
+
+**用途**: ユーザーごとの表示現場フィルタリング
+
+#### 3. 現場写真一覧取得
+```
+GET /co/places/{place_code}/sites/{site_code}/site_photos
+```
+**パラメータ**:
+- `category`: 写真カテゴリ指定
+
+#### 4. 現場写真アップロード
+```
+POST /co/places/{place_code}/sites/{site_code}/site_photos
+Content-Type: multipart/form-data
+```
+**パラメータ**:
+- `data[files][]`: 画像ファイル（最大10ファイル/リクエスト）
+- `data[crew][]`: 閲覧可能ユーザーのuser_code配列
+- `update_crew`: 更新ユーザーのuser_code
+
+#### 5. 現場資料アップロード
+```
+POST /co/places/{place_code}/sites/{site_code}/documents
+Content-Type: multipart/form-data
+```
+**パラメータ**:
+- `file_type`: 資料カテゴリ
+- `data[files][]`: ファイル（最大10ファイル/リクエスト）
+- `data[crew][]`: 閲覧可能ユーザー
+- `update_crew`: 更新ユーザー
+
+### API仕様書
+詳細は `/data/dandori_api_spec.json` (Swagger OpenAPI 3.0.2) を参照
+
+## 環境とブランチ構成
+
+| 環境名 | サービス | 環境種別 | リポジトリ | デプロイ用ブランチ | DB接続先 | 用途 |
+|--------|----------|----------|------------|-------------------|----------|------|
+| Time本番 | time | 本番 | dandoli-time | master | pro-dandoli-time-db | - |
+| Time検証 | time | STG | dandoli-time | 作業ブランチ等 | stg-time-db.dandoli.jp | - |
+| 同期ツール本番 | sync | 本番 | shin-sync-work-to-time | master | pro-dandolijp-db-work → pro-dandoli-time-db | CSがTimeにデータ登録 |
+| 同期ツール検証 | sync | STG | shin-sync-work-to-time | 作業ブランチ等 | stg-work-db.dandoli.jp | - |
+
+### 同期方式
+- Timeシステムと同様に**AWS経由で深夜バッチ同期**
+- 現状: CSV手動インポート
+- 将来: AWS API自動同期
+
+詳細は `/data/environment_branches.csv` を参照
+
 ## 環境変数（.env.local）
 ```bash
 # ダンドリワークAPI
@@ -742,6 +813,354 @@ SUPABASE_SERVICE_ROLE_KEY=（設定済み）
 ### ドラッグ&リサイズが動かない
 - useEffectの依存配列を確認
 - position/sizeのstateが正しく更新されているか確認
+
+## Day 10（2025-10-10）: 現場一覧UI大幅改善
+
+### 実装完了内容（すべて✅）
+
+#### 1. 会社ロゴアップロード機能（✅完了）
+**実装場所**: `/app/sites/page.tsx`
+
+**機能**:
+- ハンバーガーメニュー横にロゴアップロードエリア追加
+- 画像バリデーション（2MB以下、画像ファイルのみ）
+- LocalStorageで永続化
+- 64x64pxサイズ、ホバー時に削除ボタン表示
+
+**コード**:
+```typescript
+const [companyLogo, setCompanyLogo] = useState<string | null>(null)
+const fileInputRef = useRef<HTMLInputElement>(null)
+
+const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0]
+  if (file) {
+    if (!file.type.startsWith('image/')) {
+      alert('画像ファイルを選択してください')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert('ファイルサイズは2MB以下にしてください')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      setCompanyLogo(dataUrl)
+      localStorage.setItem('companyLogo', dataUrl)
+    }
+    reader.readAsDataURL(file)
+  }
+}
+```
+
+#### 2. ステータス色表示修正（✅完了）
+**問題**: 「工事中」カードの上部枠線が青色にならない
+**原因**: `border-blue-400`が他の`border-gray-200`と競合
+**解決**: 方向別borderクラス`border-t-*`を使用
+
+**修正箇所**: `/components/SiteCard.tsx`
+```typescript
+const getStatusBorderColor = (status?: string) => {
+  if (!status) return 'border-t-gray-300'
+  const normalizedStatus = status.trim()
+
+  if (normalizedStatus.includes('見積未提出')) {
+    return 'border-t-yellow-400'  // 黄色
+  }
+  if (normalizedStatus.includes('見積提出済み')) {
+    return 'border-t-green-400'   // 緑色
+  }
+  if (normalizedStatus === '工事中' || normalizedStatus.includes('工事')) {
+    return 'border-t-blue-400'     // 青色 ← 修正
+  }
+  if (normalizedStatus.includes('完工')) {
+    return 'border-t-orange-400'   // オレンジ色
+  }
+  if (normalizedStatus.includes('アフター')) {
+    return 'border-t-purple-400'   // 紫色
+  }
+  if (normalizedStatus.includes('中止') || normalizedStatus.includes('他決')) {
+    return 'border-t-pink-400'     // ピンク色
+  }
+
+  return 'border-t-gray-300'
+}
+```
+
+#### 3. リスト表示UI統一（✅完了）
+**実装場所**: `/components/SiteTable.tsx`
+
+**変更内容**:
+- 「写真アップロード」ボタン削除、行全体をクリック可能に
+- ステータスバッジの色をカード表示と統一
+- ヘッダーにグラデーション背景追加
+- ホバー時にハイライト表示（青背景、影、拡大）
+- アイコン追加（📍住所、👤担当者）
+
+**コード**:
+```typescript
+const handleRowClick = (site: Site) => {
+  setSelectedSite(site)
+  fileInputRef.current?.click()
+}
+
+// テーブル行
+<tr
+  onClick={() => handleRowClick(site)}
+  className="hover:bg-blue-50 hover:shadow-md transition-all cursor-pointer group"
+>
+```
+
+#### 4. カード表示にソート機能追加（✅完了）
+**実装場所**: `/app/sites/page.tsx`
+
+**機能**:
+- 現場名/更新日でソート可能
+- 昇順/降順切り替え
+- ピル型ボタンデザイン（選択中は白背景）
+- ↑/↓アイコン表示
+
+**コード**:
+```typescript
+const [sortKey, setSortKey] = useState<'site_name' | 'updated_at'>('site_name')
+const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+
+const handleSort = (key: 'site_name' | 'updated_at') => {
+  if (sortKey === key) {
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+  } else {
+    setSortKey(key)
+    setSortOrder('asc')
+  }
+}
+
+const sortedSites = [...filteredSites].sort((a, b) => {
+  let aValue = a[sortKey] || ''
+  let bValue = b[sortKey] || ''
+
+  if (sortKey === 'updated_at') {
+    aValue = new Date(aValue).getTime().toString()
+    bValue = new Date(bValue).getTime().toString()
+  }
+
+  if (sortOrder === 'asc') {
+    return aValue > bValue ? 1 : -1
+  } else {
+    return aValue < bValue ? 1 : -1
+  }
+})
+```
+
+#### 5. 詳細検索を中央モーダル化（✅完了）
+**実装場所**: `/app/sites/page.tsx`
+
+**変更内容**:
+- 右からのスライドパネル → 中央モーダルに変更
+- 背景ぼかし効果追加（`backdrop-blur-sm`）
+- 黒い半透明オーバーレイ（`bg-black/30`）
+- モーダルは角丸（`rounded-xl`）
+
+**コード**:
+```typescript
+{showAdvancedSearch && (
+  <>
+    {/* 背景オーバーレイ */}
+    <div
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+      onClick={() => setShowAdvancedSearch(false)}
+    />
+
+    {/* モーダル本体 */}
+    <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl max-h-[80vh] bg-white shadow-2xl z-50 overflow-y-auto rounded-xl">
+      {/* 検索フォーム */}
+    </div>
+  </>
+)}
+```
+
+#### 6. 日付入力UI改善（✅完了）
+**問題**: プレースホルダーと入力テキストが重なる
+**解決**: 2カラムグリッドレイアウト + 明確なラベル
+
+**実装場所**: `/app/sites/page.tsx`
+```typescript
+<div className="grid grid-cols-2 gap-3 items-center">
+  <div>
+    <label className="block text-xs text-gray-500 mb-1">開始日</label>
+    <input
+      type="date"
+      value={createdFrom}
+      onChange={(e) => setCreatedFrom(e.target.value)}
+      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors hover:border-blue-400"
+    />
+  </div>
+  <div>
+    <label className="block text-xs text-gray-500 mb-1">終了日</label>
+    <input type="date" ... />
+  </div>
+</div>
+```
+
+#### 7. 現場種類バッジの視認性向上（✅完了）
+**要望**: アイコン追加せずにトンマナ維持しつつ視認性向上
+**解決**: バッジスタイル化（背景色、枠線、太字）
+
+**実装場所**: `/components/SiteCard.tsx`
+```typescript
+{site.site_type && (
+  <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
+    {site.site_type}
+  </span>
+)}
+```
+
+#### 8. 複数ステータス選択機能（✅完了）
+**問題**: 「全て」選択時のリング表示と実際のフィルタリングが不一致
+**要望**: デフォルトでステータス1,2,3（黄・緑・青）を選択状態に
+
+**解決策**:
+- 単一選択（string） → 複数選択（array）に変更
+- デフォルト値: `['現調中（見積未提出）', '現調中（見積提出済み）', '工事中']`
+- トグルロジック実装（個別クリック/全てクリック）
+
+**実装場所**: `/app/sites/page.tsx`
+```typescript
+const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
+  '現調中（見積未提出）',  // 黄色
+  '現調中（見積提出済み）', // 緑色
+  '工事中'                // 青色
+])
+
+// フィルタリング
+useEffect(() => {
+  let result = sites
+
+  if (selectedStatuses.length > 0) {
+    result = result.filter(site =>
+      selectedStatuses.includes(site.status || '')
+    )
+  }
+
+  // ... その他のフィルター
+}, [selectedStatuses, sites, ...])
+
+// クリックハンドラ
+const handleStatusClick = (status: string) => {
+  if (status === '全て') {
+    if (selectedStatuses.length === 7 || selectedStatuses.length === 0) {
+      setSelectedStatuses([])
+    } else {
+      setSelectedStatuses([
+        '現調中（見積未提出）',
+        '現調中（見積提出済み）',
+        '工事中',
+        '完工',
+        'アフター',
+        '中止・他決'
+      ])
+    }
+  } else {
+    if (selectedStatuses.includes(status)) {
+      setSelectedStatuses(selectedStatuses.filter(s => s !== status))
+    } else {
+      setSelectedStatuses([...selectedStatuses, status])
+    }
+  }
+}
+
+// リング表示判定
+const isSelected = status === '全て'
+  ? selectedStatuses.length === 7 || selectedStatuses.length === 0
+  : selectedStatuses.includes(status)
+```
+
+### 技術的な実装詳細
+
+#### Tailwind方向別borderクラス
+```typescript
+// ❌ 動かない（他のborderと競合）
+className="border-blue-400 border-gray-200"
+
+// ✅ 正しい（方向別）
+className="border-t-blue-400 border-l border-r border-b border-gray-200"
+```
+
+#### 配列ベースのフィルタリング
+```typescript
+// 複数条件のAND結合
+let result = sites
+
+if (selectedStatuses.length > 0) {
+  result = result.filter(site => selectedStatuses.includes(site.status || ''))
+}
+
+if (searchQuery) {
+  result = result.filter(site =>
+    site.site_name.includes(searchQuery) ||
+    site.address?.includes(searchQuery)
+  )
+}
+
+if (selectedManager) {
+  result = result.filter(site => site.manager_name === selectedManager)
+}
+```
+
+### 変更ファイル一覧
+
+#### 修正
+- `app/sites/page.tsx` - ロゴアップロード、ソート機能、モーダル、複数選択
+- `components/SiteCard.tsx` - border色修正、種類バッジ改善
+- `components/SiteTable.tsx` - 行クリック、ステータス色統一、UI改善
+
+### バグ修正
+
+#### 1. ステータス境界色が反映されない（✅完了）
+**問題**: 「工事中」カードの上部枠線が灰色のまま
+**原因**: `border-blue-400`が`border-gray-200`と競合
+**解決**: `border-t-blue-400`に変更（方向別クラス使用）
+
+#### 2. 日付入力のテキスト重なり（✅完了）
+**問題**: プレースホルダーが入力値と重なる
+**解決**: 2カラムグリッド + ラベルを上に配置
+
+#### 3. ステータス選択とフィルタの不一致（✅完了）
+**問題**: 「全て」に青リングがあるのにステータス1,2,3のみ表示
+**解決**: 配列ベース選択に変更、リング表示ロジック修正
+
+### ユーザーフィードバック
+
+#### 高評価コメント
+- "おけ！！！！" - モーダル実装完了時
+- "反映されたわ！！！！！！！！！！" - 青色境界線修正時
+- "完璧や！！！！！！！！" - 複数選択機能実装時
+
+#### 改善要望と対応
+- ロゴ位置調整 → ハンバーガー左、ロゴ右に配置
+- リスト表示統一 → カードと同じトンマナ適用
+- ソート機能追加 → カード表示にも実装
+- 詳細検索UI → 中央モーダル + ぼかし背景
+
+### Git履歴
+
+#### Commit（2025-10-10予定）
+"feat: Day 10完了 - 現場一覧UI大幅改善"
+- 会社ロゴアップロード機能（LocalStorage保存）
+- ステータス色修正（border-t-*で方向別対応）
+- リスト表示UI統一（カードとトンマナ揃え）
+- カード表示ソート機能追加
+- 詳細検索モーダル化（中央配置+ぼかし背景）
+- 日付入力UI改善（2カラムレイアウト）
+- 現場種類バッジ視認性向上
+- 複数ステータス選択機能（デフォルト1,2,3選択）
+
+### 最終更新
+- 日時: 2025-10-10
+- 状態: Day 10完了 - 現場一覧UI大幅改善完了
+- 次回タスク: Day 11へ進む
+
+---
 
 ## 今後の開発予定
 - [ ] 黒板レイアウトパターン実装（12種類）
