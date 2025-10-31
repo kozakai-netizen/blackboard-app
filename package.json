@@ -6,12 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "tunnel:stg": "node scripts/tunnel-stg.js",
+    "dev:stg": "concurrently -k -s first \"npm run tunnel:stg\" \"next dev\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
     "date-fns": "^4.1.0",
     "iconv-lite": "^0.7.0",
+    "mysql2": "^3.15.3",
     "next": "15.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0"
@@ -22,6 +25,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "tailwindcss": "^4",
