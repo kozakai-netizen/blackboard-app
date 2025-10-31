@@ -7,13 +7,17 @@ type Row = { id: number; title?: string; remarks?: string; updated_at?: string }
 
 export default function Page() {
   const [row, setRow] = useState<Row | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     fetch("/api/stg-blackboards", { cache: "no-store" })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`API ${r.status}`);
+        return r.json();
+      })
       .then((rows: Row[]) => setRow(rows?.[0] ?? null))
-      .catch(console.error);
+      .catch((e) => setErr(String(e)));
   }, []);
 
   useEffect(() => {
@@ -62,7 +66,15 @@ export default function Page() {
     <div className="p-6 space-y-4">
       <h1 className="text-xl font-semibold">STG備考・描画テスト</h1>
       <p className="text-sm text-gray-600">最新1件のremarksをCanvasに描画します（赤枠はデバッグ）。</p>
-      {!row ? (
+      {err ? (
+        <div className="text-red-600">
+          エラー: {err}（
+          <a className="underline" href="/api/_health/stg" target="_blank">
+            /api/_health/stg
+          </a>{" "}
+          で詳細確認）
+        </div>
+      ) : !row ? (
         <div>Loading...</div>
       ) : (
         <>
