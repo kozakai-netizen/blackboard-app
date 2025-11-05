@@ -11,7 +11,7 @@ interface BlackboardFormProps {
   disabled?: boolean;
   hideSubmitButton?: boolean;
   allowProjectNameEdit?: boolean;
-  template: Template; // 必須に変更
+  template?: Template; // オプショナルに変更（IndividualModeでの使用に対応）
   photoCategories?: { id: number; name: string }[];
   selectedCategory?: string;
   onCategoryChange?: (category: string) => void;
@@ -49,16 +49,16 @@ export function BlackboardForm({
   const [projectName, setProjectName] = useState(allowProjectNameEdit ? '' : initialProjectName);
   const [timestamp, setTimestamp] = useState(new Date());
 
-  // テンプレートのデフォルト値で初期化
-  const [workType, setWorkType] = useState((template.defaultValues?.工種 as string) || '');
-  const [weather, setWeather] = useState((template.defaultValues?.天候 as string) || '');
-  const [workCategory, setWorkCategory] = useState((template.defaultValues?.種別 as string) || '');
-  const [workDetail, setWorkDetail] = useState((template.defaultValues?.細別 as string) || '');
-  const [contractor, setContractor] = useState((template.defaultValues?.施工者 as string) || '');
-  const [location, setLocation] = useState((template.defaultValues?.撮影場所 as string) || '');
-  const [station, setStation] = useState((template.defaultValues?.測点位置 as string) || '');
-  const [witness, setWitness] = useState((template.defaultValues?.立会者 as string) || '');
-  const [remarks, setRemarks] = useState((template.defaultValues?.備考 as string) || '');
+  // テンプレートのデフォルト値で初期化（テンプレートがある場合のみ）
+  const [workType, setWorkType] = useState((template?.defaultValues?.工種 as string) || '');
+  const [weather, setWeather] = useState((template?.defaultValues?.天候 as string) || '');
+  const [workCategory, setWorkCategory] = useState((template?.defaultValues?.種別 as string) || '');
+  const [workDetail, setWorkDetail] = useState((template?.defaultValues?.細別 as string) || '');
+  const [contractor, setContractor] = useState((template?.defaultValues?.施工者 as string) || '');
+  const [location, setLocation] = useState((template?.defaultValues?.撮影場所 as string) || '');
+  const [station, setStation] = useState((template?.defaultValues?.測点位置 as string) || '');
+  const [witness, setWitness] = useState((template?.defaultValues?.立会者 as string) || '');
+  const [remarks, setRemarks] = useState((template?.defaultValues?.備考 as string) || '');
 
   // initialValuesが変更されたら、ローカルstateを更新
   // 依存配列はinitialValuesの個別プロパティのみ（ローカルstateは含めない）
@@ -392,16 +392,16 @@ export function BlackboardForm({
 
       {/* テンプレート項目（備考以外は2カラムグリッド） */}
       <div className="grid grid-cols-2 gap-4">
-        {template.fields
-          .filter(f => f !== '工事名' && f !== '撮影日' && f !== '備考')
+        {template?.fields
+          ?.filter(f => f !== '工事名' && f !== '撮影日' && f !== '備考')
           .map(fieldId => renderField(fieldId))}
       </div>
 
         {/* 備考は全幅 */}
-        {template.fields.includes('備考') && renderField('備考')}
+        {template?.fields?.includes('備考') && renderField('備考')}
       </div>
 
-      {/* 下部: 登録ボタン */}
+      {/* 下部: アップロードボタン */}
       {!hideSubmitButton && (
         <div className="mt-4 pt-4 border-t">
           <button
@@ -410,9 +410,9 @@ export function BlackboardForm({
             className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium text-base transition-colors shadow-sm"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            登録する
+            ダンドリワーク現場写真カテゴリを選択
           </button>
         </div>
       )}

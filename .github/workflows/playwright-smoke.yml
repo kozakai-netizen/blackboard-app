@@ -1,0 +1,137 @@
+name: Playwright Smoke Tests
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "playwright.config.ts"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # コード変更があるかチェック（PR時のみ）
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for code changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'app/**'
+              - 'components/**'
+              - 'lib/**'
+              - 'playwright.config.ts'
+              - 'tests/**'
+              - 'package.json'
+              - 'package-lock.json'
+
+  # コード変更がない場合はNOOPで緑にする
+  noop:
+    needs: changes
+    if: ${{ needs.changes.outputs.code != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: No code changes detected
+        run: |
+          echo "✅ No code changes detected. Skipping tests to save CI minutes."
+          echo "This is intentional - documentation/config-only changes don't need E2E tests."
+
+  # スモークテスト実行（chromiumのみ）
+  smoke:
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.result == 'skipped' || needs.changes.outputs.code == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: List @smoke tests
+        run: |
+          echo "=== @smoke tests ==="
+          grep -R --line-number "@smoke" tests || true
+          echo "===================="
+
+      - name: Pick ephemeral port
+        id: port
+        run: echo "PORT=$((4000 + RANDOM % 900))" >> $GITHUB_OUTPUT
+
+      - name: Build application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Run smoke tests
+        env:
+          PW_PORT: ${{ steps.port.outputs.PORT }}
+          PW_BASE_URL: http://localhost:${{ steps.port.outputs.PORT }}
+          PW_WORKERS: 2
+          CI: true
+        run: |
+          # Start server in background
+          npx next start -p ${{ steps.port.outputs.PORT }} &
+          SERVER_PID=$!
+
+          # Wait for server to be ready
+          timeout 60 bash -c 'until curl -f http://localhost:${{ steps.port.outputs.PORT }}; do sleep 1; done' || exit 1
+
+          # Run smoke tests (reporter/workers are configured in playwright.config.ts)
+          npx playwright test --project=smoke \
+            --output=test-results \
+            --max-failures=1
+
+          # Cleanup
+          kill $SERVER_PID || true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          path: |
+            playwright-report
+            test-results/**/*.xml
+          if-no-files-found: warn
+          retention-days: 7

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { getTemplateById, updateTemplate } from '@/lib/templates'
 import type { BlackboardData, BlackboardDesignSettings, Template } from '@/types'
 import DraggableBlackboard from '@/components/DraggableBlackboard'
+import { isLegacyDesign } from '@/types/type-guards'
 
 // 利用可能な項目
 const AVAILABLE_FIELDS = [
@@ -74,7 +75,14 @@ export default function EditTemplatePage() {
       setIsDefault(template.isDefault || false)
       setSelectedFields(template.fields)
       setDefaultValues(template.defaultValues)
-      setDesignSettings(template.designSettings)
+
+      // Union型の場合はLegacyのみ受け入れる（このページはLegacy編集専用）
+      if (isLegacyDesign(template.designSettings)) {
+        setDesignSettings(template.designSettings)
+      } else {
+        // 新型の場合はデフォルト値にフォールバック
+        console.warn('⚠️ 新型LayoutConfigは編集できません。デフォルト値を使用します。')
+      }
     } catch (error) {
       console.error('❌ Failed to load template:', error)
       alert('テンプレートの読み込みに失敗しました')

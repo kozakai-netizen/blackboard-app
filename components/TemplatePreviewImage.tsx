@@ -4,12 +4,14 @@
 import { useEffect, useRef } from 'react';
 import type { Template, BlackboardData } from '@/types';
 import { blackboardInfoToData } from '@/lib/blackboard-utils';
+import { calcMinHeightNormFromFit, type Fit } from '@/lib/blackboard-layout';
+import { isLegacyDesign } from '@/types/type-guards';
 
 interface TemplatePreviewImageProps {
   template: Template;
 }
 
-export function TemplatePreviewImage({ template }: TemplatePreviewImageProps) {
+export function TemplatePreviewImage({ template, scale = 1 }: TemplatePreviewImageProps & { scale?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -19,51 +21,92 @@ export function TemplatePreviewImage({ template }: TemplatePreviewImageProps) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 黒板のサイズを計算（想定画像サイズ 1200x900）
-    const imgWidth = 1200;
-    const imgHeight = 900;
+    // 想定画像サイズ（物理ピクセル）- scaleで縮小
+    const imgWidth = 1200 * scale;
+    const imgHeight = 900 * scale;
     const { designSettings, fields } = template;
 
-    const bbWidth = (imgWidth * designSettings.width) / 100;
+    // Fit型定義（画像の描画領域）
+    const fit: Fit = {
+      dx: 0,
+      dy: 0,
+      drawW: imgWidth,
+      drawH: imgHeight
+    };
 
-    // 固定高さを使用（designSettingsから取得）
-    const bbHeight = (imgHeight * designSettings.height) / 100;
+    // ✅ Union型保護: LayoutConfigの場合はプレビューをスキップ
+    if (!isLegacyDesign(designSettings)) {
+      console.warn('⚠️ TemplatePreviewImage: LayoutConfigはプレビュー未対応');
+      return;
+    }
 
-    // キャンバスを黒板サイズに設定
-    canvas.width = bbWidth;
-    canvas.height = bbHeight;
+    // 正規化座標（0-1）
+    const bbNorm = {
+      x: 0,
+      y: 0,
+      w: designSettings.width / 100,
+      h: designSettings.height / 100
+    };
 
-    // 黒板のみを描画（位置は0,0から）
-    drawBlackboardOnly(ctx, template, bbWidth, bbHeight);
-  }, [template]);
+    // 幅ベースで必要な高さを計算
+    const minH = calcMinHeightNormFromFit(fields, bbNorm.w, fit);
+    const hNorm = Math.max(bbNorm.h, minH);
+
+    // 最終矩形（正規化座標）
+    const finalNorm = { ...bbNorm, h: hNorm };
+
+    // Canvas実サイズを決定（2倍スケール）
+    const dpr = 2;
+    const bbWidthPx = Math.round(bbNorm.w * imgWidth);
+    const bbHeightPx = Math.round(hNorm * imgHeight);
+
+    canvas.width = bbWidthPx * dpr;
+    canvas.height = bbHeightPx * dpr;
+
+    // スケール適用
+    ctx.scale(dpr, dpr);
+
+    // クリップ領域設定（はみ出し防止）
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, bbWidthPx, bbHeightPx);
+    ctx.clip();
+
+    // 黒板描画（型ガード後なのでdesignSettingsはBlackboardDesignSettings）
+    drawBlackboardOnly(ctx, designSettings, fields, template.defaultValues, bbWidthPx, bbHeightPx);
+
+    ctx.restore();
+  }, [template, scale]);
 
   return (
     <canvas
       ref={canvasRef}
       className="w-full h-auto rounded border border-gray-200"
+      style={{ imageRendering: 'crisp-edges' }}
     />
   );
 }
 
 function drawBlackboardOnly(
   ctx: CanvasRenderingContext2D,
-  template: Template,
+  designSettings: import('@/types').BlackboardDesignSettings,
+  fields: string[],
+  defaultValues: any,
   bbWidth: number,
   bbHeight: number
 ) {
-  const { designSettings, fields } = template;
   const data: Partial<BlackboardData> = {
     工事名: '○○マンション新築工事',
-    工種: template.defaultValues.工種 as string || '土工',
-    天候: template.defaultValues.天候 as string || '晴れ',
-    種別: template.defaultValues.種別 as string || '掘削',
-    細別: template.defaultValues.細別 as string || 'バックホウ',
+    工種: defaultValues.工種 as string || '土工',
+    天候: defaultValues.天候 as string || '晴れ',
+    種別: defaultValues.種別 as string || '掘削',
+    細別: defaultValues.細別 as string || 'バックホウ',
     撮影日: '2025/10/09',
-    施工者: template.defaultValues.施工者 as string || '○○工務店',
-    撮影場所: template.defaultValues.撮影場所 as string || 'A工区',
-    測点位置: template.defaultValues.測点位置 as string || 'No.10',
-    立会者: template.defaultValues.立会者 as string || '山田太郎',
-    備考: template.defaultValues.備考 as string || ''
+    施工者: defaultValues.施工者 as string || '○○工務店',
+    撮影場所: defaultValues.撮影場所 as string || 'A工区',
+    測点位置: defaultValues.測点位置 as string || 'No.10',
+    立会者: defaultValues.立会者 as string || '山田太郎',
+    備考: defaultValues.備考 as string || ''
   };
 
   // 黒板を0,0から描画
@@ -85,21 +128,21 @@ function drawBlackboardOnly(
   const padding = bbWidth * 0.015;
   ctx.fillRect(bbX + padding, bbY + padding, bbWidth - padding * 2, bbHeight - padding * 2);
 
-  // フォントサイズ
+  // フォントサイズ（幅ベース）- 動的高さ計算で余白削減したので大きくできる
   const baseFontSize = designSettings.fontSize === 'large'
-    ? Math.floor(bbHeight * 0.10)
-    : Math.floor(bbHeight * 0.08);
+    ? Math.floor(bbWidth * 0.045)  // 0.032 → 0.045 (約40%増)
+    : Math.floor(bbWidth * 0.040);  // 0.028 → 0.040 (約43%増)
   const labelFontSize = Math.floor(baseFontSize * 0.9);
   const valueFontSize = Math.floor(baseFontSize * 0.85);
 
   ctx.fillStyle = designSettings.textColor;
   ctx.textBaseline = 'top';
 
-  let currentY = bbY + bbHeight * 0.05;
+  let currentY = bbY + bbWidth * 0.05;
 
   // 工事名を全幅で表示
   if (fields.includes('工事名')) {
-    const itemHeight = bbHeight * 0.12;
+    const itemHeight = bbWidth * 0.12;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     ctx.fillRect(bbX + padding, currentY, bbWidth - padding * 2, itemHeight);
@@ -121,13 +164,13 @@ function drawBlackboardOnly(
     ctx.font = `${valueFontSize}px sans-serif`;
     ctx.fillText(data.工事名 || '', bbX + padding + labelWidth + bbWidth * 0.03, currentY + itemHeight * 0.3);
 
-    currentY += itemHeight + bbHeight * 0.03;
+    currentY += itemHeight + bbWidth * 0.03;
   }
 
   // その他の項目を2列グリッドで表示
   const otherFields = fields.filter(f => f !== '工事名' && f !== '備考');
   const itemWidth = (bbWidth - padding * 2 - bbWidth * 0.02) / 2;
-  const itemHeight = bbHeight * 0.09;
+  const itemHeight = bbWidth * 0.09;
   const gap = bbWidth * 0.02;
 
   otherFields.forEach((fieldId, index) => {
@@ -135,7 +178,7 @@ function drawBlackboardOnly(
     const row = Math.floor(index / 2);
 
     const itemX = bbX + padding + col * (itemWidth + gap);
-    const itemY = currentY + row * (itemHeight + bbHeight * 0.02);
+    const itemY = currentY + row * (itemHeight + bbWidth * 0.02);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     ctx.fillRect(itemX, itemY, itemWidth, itemHeight);
@@ -159,11 +202,14 @@ function drawBlackboardOnly(
     ctx.fillText(truncateText(ctx, value, itemWidth - labelWidth - itemWidth * 0.1), itemX + labelWidth + itemWidth * 0.05, itemY + itemHeight * 0.35);
   });
 
-  // SHA-256マーク
-  ctx.font = `${baseFontSize * 0.6}px monospace`;
-  ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+  // SHA-256マーク（下基準・幅ベースのパディング）
   ctx.textAlign = 'right';
-  ctx.fillText('SHA-256', bbX + bbWidth - padding * 2, bbY + bbHeight - bbHeight * 0.08);
+  ctx.textBaseline = 'bottom';
+  const pad = Math.round(bbWidth * 0.05);
+  ctx.font = `${Math.round(bbWidth * 0.055)}px monospace`;
+  ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+  ctx.fillText('SHA-256', bbX + bbWidth - pad, bbY + bbHeight - pad);
+  ctx.textBaseline = 'top'; // リセット
 }
 
 function hexToRgba(hex: string, alpha: number): string {

@@ -139,8 +139,11 @@ export interface Template {
   // デフォルト値
   defaultValues: Partial<BlackboardData>;
 
-  // デザイン設定
-  designSettings: BlackboardDesignSettings;
+  // デザイン設定（旧形式 or 新レイアウトシステム形式）
+  designSettings: BlackboardDesignSettings | import('./layouts').LayoutConfig;
+
+  // レイアウトシステム（新機能）
+  layout_id?: string | null; // レイアウトへの参照（新システム用）
 
   // メタ情報
   isDefault: boolean; // デフォルトテンプレートか
@@ -186,3 +189,9 @@ export interface IndividualUploadSettings {
   template: Template;
   photos: PhotoSettings[];
 }
+
+// ========================================
+// レイアウトシステムの型定義
+// ========================================
+export type { Layout, LayoutConfig } from './layouts';
+export { anchorToTopLeft } from './layouts';

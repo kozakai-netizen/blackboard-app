@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getAllTemplates, deleteTemplate, duplicateTemplate } from '@/lib/templates'
 import type { Template } from '@/types'
+import { isLegacyDesign } from '@/types/type-guards'
 
 export default function TemplatesPage() {
   const router = useRouter()
@@ -154,7 +155,7 @@ export default function TemplatesPage() {
                 <div
                   className="text-white shadow-xl w-full"
                   style={{
-                    backgroundColor: template.designSettings.bgColor,
+                    backgroundColor: isLegacyDesign(template.designSettings) ? template.designSettings.bgColor : '#1a5f3f',
                     fontSize: '1rem',
                     border: '4px solid rgba(255, 255, 255, 0.5)',
                     boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.6)',

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createTemplate } from '@/lib/templates'
 import type { BlackboardData, BlackboardDesignSettings } from '@/types'
 import DraggableBlackboard from '@/components/DraggableBlackboard'
+import LayoutSelector from '@/components/LayoutSelector'
 
 // 利用可能な項目
 const AVAILABLE_FIELDS = [
@@ -29,6 +30,9 @@ export default function NewTemplatePage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [isDefault, setIsDefault] = useState(false)
+
+  // レイアウト選択（新システム）
+  const [layoutId, setLayoutId] = useState<string | null>(null)
 
   // 選択された項目
   const [selectedFields, setSelectedFields] = useState<string[]>([
@@ -115,6 +119,7 @@ export default function NewTemplatePage() {
         defaultValues,
         designSettings,
         isDefault,
+        layout_id: layoutId, // ★ 新レイアウトシステム
       })
 
       alert('テンプレートを作成しました！')
@@ -204,6 +209,27 @@ export default function NewTemplatePage() {
                   <label htmlFor="isDefault" className="text-sm font-medium cursor-pointer">
                     ⭐ このテンプレートをデフォルトに設定する
                   </label>
+                </div>
+              </div>
+            </div>
+
+            {/* レイアウト選択（新システム） */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold mb-4">🎯 レイアウト選択（新機能）</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                蔵衛門互換の12種類のレイアウトパターンから選択できます
+              </p>
+              <LayoutSelector value={layoutId} onChange={setLayoutId} />
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-600">💡</span>
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">レイアウトについて</p>
+                    <p>
+                      レイアウトを選択すると、新しいレイアウトシステムが適用されます。
+                      選択しない場合は、従来の黒板デザイン設定が使われます。
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

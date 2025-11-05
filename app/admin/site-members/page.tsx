@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function SiteMembersAdminPage() {
-  const router = useRouter()
+  const _router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ imported: number; errors: number } | null>(null)

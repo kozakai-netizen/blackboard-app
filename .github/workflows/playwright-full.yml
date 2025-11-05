@@ -1,0 +1,111 @@
+name: Playwright Full E2E
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    types: [labeled, synchronize]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full:
+    # 以下の条件で実行:
+    # 1. 手動実行
+    # 2. PR に "run-e2e" ラベルが付いている
+    # 3. main ブランチへの push
+    if: >
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' &&
+         contains(github.event.pull_request.labels.*.name, 'run-e2e')) ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        browser: [chromium, webkit, firefox]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ matrix.browser }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-${{ matrix.browser }}-
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Pick ephemeral port
+        id: port
+        run: echo "PORT=$((4000 + RANDOM % 900))" >> $GITHUB_OUTPUT
+
+      - name: Build application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Run full tests (${{ matrix.browser }})
+        env:
+          PW_PORT: ${{ steps.port.outputs.PORT }}
+          PW_BASE_URL: http://localhost:${{ steps.port.outputs.PORT }}
+          PW_WORKERS: 2
+          CI: true
+        run: |
+          # Start server in background
+          npx next start -p ${{ steps.port.outputs.PORT }} &
+          SERVER_PID=$!
+
+          # Wait for server to be ready
+          timeout 60 bash -c 'until curl -f http://localhost:${{ steps.port.outputs.PORT }}; do sleep 1; done' || exit 1
+
+          # Run full tests
+          npx playwright test --project=${{ matrix.browser }} --reporter=line
+
+          # Cleanup
+          kill $SERVER_PID || true
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-full-report-${{ matrix.browser }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 1
+
+  # 全ブラウザのテストが成功したら summary を出力
+  summary:
+    needs: full
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Summary
+        run: |
+          if [ "${{ needs.full.result }}" == "success" ]; then
+            echo "✅ All browser tests passed!"
+          else
+            echo "❌ Some browser tests failed. Check the logs above."
+            exit 1
+          fi
