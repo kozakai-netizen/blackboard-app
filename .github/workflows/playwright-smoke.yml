@@ -87,6 +87,10 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Lint (non-blocking)
+        run: npm run lint
+        continue-on-error: true
+
       - name: List @smoke tests
         run: |
           echo "=== @smoke tests ==="
