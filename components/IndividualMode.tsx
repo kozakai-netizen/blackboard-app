@@ -22,7 +22,6 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
     projectName,
     workType: '基礎工事',
     weather: '晴れ',
-    workContent: '',
     timestamp: new Date()
   });
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -285,6 +284,7 @@ export function IndividualMode({ files, projectName, onSubmit, onBack }: Individ
             disabled={selectedIndices.size === 0}
             hideSubmitButton={true}
             allowProjectNameEdit={true}
+            template={undefined}
           />
           <button
             onClick={handleApply}

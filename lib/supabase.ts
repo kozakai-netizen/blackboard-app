@@ -12,10 +12,29 @@ export function getServerSupabase() {
   return createClient(supabaseUrl, serviceRoleKey);
 }
 
+// TODO: マニフェスト自動アップロード機能の追加
+// 【現状】
+// - Supabase Storageにマニフェストを保存のみ
+// - ユーザーは手動でマニフェストをダウンロード可能
+//
+// 【将来実装】
+// - Supabase保存後、ダンドリワークAPIへ自動アップロード
+// - エンドポイント: /co/places/{place_code}/sites/{site_code}/documents
+// - パラメータ:
+//   - file_type: "電子小黒板マニフェスト"（事前にカテゴリ作成が必要）
+//   - data[files][]: manifest.jsonファイル
+//   - data[crew][]: 閲覧可能ユーザーのuser_code配列
+//   - update_crew: 更新ユーザーのuser_code
+// - 実装イメージ:
+//   1. Supabaseに保存
+//   2. 保存したマニフェストをBlobに変換
+//   3. ダンドリワークAPI（/api/dandori/documents）にPOST
+//   4. エラー時はSupabaseのみに保持（後でリトライ可能）
 export async function saveManifest(manifest: Manifest): Promise<string> {
   const filename = `${manifest.jobId}/manifest.json`;
   const data = JSON.stringify(manifest, null, 2);
 
+  // Supabaseに保存
   const { data: uploadData, error } = await supabase.storage
     .from('manifests')
     .upload(filename, new Blob([data], { type: 'application/json' }), {
@@ -26,6 +45,15 @@ export async function saveManifest(manifest: Manifest): Promise<string> {
   if (error) {
     throw new Error(`Failed to save manifest: ${error.message}`);
   }
+
+  // TODO: ここでダンドリワークAPIへマニフェストを自動アップロード
+  // try {
+  //   const manifestBlob = new Blob([data], { type: 'application/json' });
+  //   await uploadManifestToDandori(manifest.placeCode, manifest.siteCode, manifestBlob, filename);
+  // } catch (error) {
+  //   console.error('⚠️ Failed to upload manifest to Dandori API:', error);
+  //   // エラーでも処理は続行（Supabaseには保存済み）
+  // }
 
   return uploadData.path;
 }

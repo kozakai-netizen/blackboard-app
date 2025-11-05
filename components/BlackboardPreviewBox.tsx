@@ -1,11 +1,12 @@
 // components/BlackboardPreviewBox.tsx
 import React from 'react'
-import type { BlackboardData, BlackboardDesignSettings } from '@/types'
+import type { BlackboardData, BlackboardDesignSettings, LayoutConfig } from '@/types'
+import { isLegacyDesign } from '@/types/type-guards'
 
 interface Props {
   selectedFields: string[]
   defaultValues: Partial<BlackboardData>
-  designSettings: BlackboardDesignSettings
+  designSettings: BlackboardDesignSettings | LayoutConfig
   availableFields: Array<{ id: string; label: string; required: boolean }>
 }
 
@@ -15,6 +16,15 @@ export default function BlackboardPreviewBox({
   designSettings,
   availableFields,
 }: Props) {
+  // ✅ Union型保護: LayoutConfigは表示未対応（レガシー専用）
+  if (!isLegacyDesign(designSettings)) {
+    return (
+      <div className="rounded border-2 border-amber-400 bg-amber-100 p-3 text-center text-xs text-amber-800">
+        新レイアウト方式のテンプレートはプレビュー未対応です
+      </div>
+    )
+  }
+
   return (
     <div
       className="text-white shadow-xl"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function HomePage() {
@@ -10,6 +10,10 @@ export default function HomePage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null)
+  const [showMenu, setShowMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSelectType = (type: 'motoduke' | 'kyoryoku') => {
     setSelectedType(type)
@@ -71,18 +75,148 @@ export default function HomePage() {
     setError('')
   }
 
+  // 会社ロゴをLocalStorageから読み込み
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedLogo = localStorage.getItem('companyLogo')
+      if (savedLogo) {
+        setCompanyLogo(savedLogo)
+      }
+    }
+  }, [])
+
+  // メニュー外クリックで閉じる
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false)
+      }
+    }
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showMenu])
+
+  // ロゴアップロード
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('画像ファイルを選択してください')
+        return
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        alert('ファイルサイズは2MB以下にしてください')
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string
+        setCompanyLogo(dataUrl)
+        localStorage.setItem('companyLogo', dataUrl)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleRemoveLogo = () => {
+    setCompanyLogo(null)
+    localStorage.removeItem('companyLogo')
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      <div className="max-w-4xl mx-auto px-4 py-16">
-        {/* ヘッダー */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            📋 電子小黒板システム
-          </h1>
-          <p className="text-xl text-gray-600">
-            ダンドリワーク連携 - 現場写真一括アップロード
-          </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* ヘッダー */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* ハンバーガーメニュー（ロゴと統合） */}
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  title="メニューを開く"
+                >
+                  {companyLogo ? (
+                    <div className="relative group">
+                      <img
+                        src={companyLogo}
+                        alt="会社ロゴ"
+                        className="h-16 w-16 object-contain"
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRemoveLogo()
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity hidden group-hover:flex"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg">
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 6h16M4 12h16M4 18h16"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+
+                {/* ドロップダウンメニュー */}
+                {showMenu && (
+                  <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-2">
+                      <button
+                        onClick={() => {
+                          fileInputRef.current?.click()
+                          setShowMenu(false)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-3"
+                      >
+                        <span>🖼️</span>
+                        <span>ロゴをアップロード</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">電子小黒板システム</h1>
+                <p className="mt-1 text-sm text-gray-600">
+                  ダンドリワーク連携 - 現場写真一括アップロード
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* 隠しファイル入力 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleLogoUpload}
+        className="hidden"
+      />
+
+      <div className="max-w-4xl mx-auto px-4 py-16">
 
         {/* クイックアクセス / ログインフォーム */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">

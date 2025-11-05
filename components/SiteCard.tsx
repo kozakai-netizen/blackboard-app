@@ -23,14 +23,21 @@ interface Site {
 interface SiteCardProps {
   site: Site
   placeCode: string
+  onCardClick?: (site: Site) => void
 }
 
-export function SiteCard({ site, placeCode }: SiteCardProps) {
+export function SiteCard({ site, placeCode, onCardClick }: SiteCardProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleCardClick = () => {
-    fileInputRef.current?.click()
+    console.log('🔍 [SiteCard] Card clicked:', site.site_code)
+    if (onCardClick) {
+      onCardClick(site)
+    } else {
+      // フォールバック: 従来のページ遷移
+      router.push(`/sites/${site.site_code}`)
+    }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,6 +120,7 @@ export function SiteCard({ site, placeCode }: SiteCardProps) {
 
       <div
         onClick={handleCardClick}
+        data-testid="site-card"
         className={`bg-white rounded-lg shadow hover:shadow-lg transition-all p-5 border-l border-r border-b border-gray-200 cursor-pointer border-t-4 ${getStatusBorderColor(site.status)}`}
       >
         {/* ステータスバッジ */}

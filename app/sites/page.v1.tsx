@@ -228,7 +228,7 @@ export default function SitesPage() {
             rawStatusCounts[rawStatus] = (rawStatusCounts[rawStatus] || 0) + 1
           })
 
-          formattedSites.forEach(site => {
+          formattedSites.forEach((site: any) => {
             const status = site.status || '不明'
             statusCounts[status] = (statusCounts[status] || 0) + 1
           })
@@ -252,7 +252,7 @@ export default function SitesPage() {
                 const userSiteCodes = siteMembers.map(m => m.site_code)
                 console.log(`👥 User ${userId} is in ${userSiteCodes.length} sites:`, userSiteCodes)
 
-                const filteredByUser = formattedSites.filter(site =>
+                const filteredByUser = formattedSites.filter((site: any) =>
                   userSiteCodes.includes(site.site_code)
                 )
                 console.log(`🔍 Filtered by user participation: ${formattedSites.length} → ${filteredByUser.length}`)

@@ -1,5 +1,6 @@
 // app/api/dandori/photo-categories/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchJSONWithRetry } from '@/lib/http';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +31,8 @@ export async function GET(request: NextRequest) {
 
     console.log('📸 Fetching photo categories from:', url);
 
-    const response = await fetch(url, {
+    // ✅ fetchJSONWithRetry に置き換え（429/503のみ再試行、401/403は即エラー）
+    const data = await fetchJSONWithRetry(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -38,23 +40,19 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const data = await response.json();
     console.log('📸 Photo categories response:', data);
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: data.message || 'Failed to fetch photo categories', details: data },
-        { status: response.status }
-      );
-    }
 
     // カテゴリ一覧を返す
     return NextResponse.json(data);
 
   } catch (error) {
-    console.error('Photo categories API error:', error);
+    console.error('📸 Photo categories API error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        hint: 'Check console for HTTP status / content-type / response body'
+      },
       { status: 500 }
     );
   }

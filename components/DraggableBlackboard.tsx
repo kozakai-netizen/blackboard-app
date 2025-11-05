@@ -2,13 +2,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { BlackboardData, BlackboardDesignSettings } from '@/types'
+import type { BlackboardData, BlackboardDesignSettings, LayoutConfig } from '@/types'
+import { isLegacyDesign } from '@/types/type-guards'
 import BlackboardPreviewBox from './BlackboardPreviewBox'
 
 interface Props {
   selectedFields: string[]
   defaultValues: Partial<BlackboardData>
-  designSettings: BlackboardDesignSettings
+  designSettings: BlackboardDesignSettings | LayoutConfig
   availableFields: Array<{ id: string; label: string; required: boolean }>
   onPositionChange: (position: { x: number; y: number }) => void
   onSizeChange?: (width: number) => void
@@ -24,13 +25,16 @@ export default function DraggableBlackboard({
   onSizeChange,
   imageUrl,
 }: Props) {
+  // ✅ Hooksを最初に呼ぶ（Reactのルール）
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   const [resizeHandle, setResizeHandle] = useState<string | null>(null)
-  const [position, setPosition] = useState(designSettings.position)
+  // 型ガード後のみアクセスするため、安全なデフォルト値を使用
+  const safeDesignSettings = isLegacyDesign(designSettings) ? designSettings : { position: { x: 0, y: 0 }, width: 80, height: 20 }
+  const [position, setPosition] = useState(safeDesignSettings.position)
   const [size, setSize] = useState({
-    width: designSettings.width || 80,
-    height: designSettings.height || 20
+    width: safeDesignSettings.width || 80,
+    height: safeDesignSettings.height || 20
   })
   const [aspectRatio, setAspectRatio] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -40,16 +44,21 @@ export default function DraggableBlackboard({
 
   // 初回マウント時のみサイズを設定
   useEffect(() => {
-    setSize({
-      width: designSettings.width || 35,
-      height: designSettings.height || 20
-    })
+    if (isLegacyDesign(designSettings)) {
+      setSize({
+        width: designSettings.width || 35,
+        height: designSettings.height || 20
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 位置のみ同期（サイズは同期しない）
   useEffect(() => {
-    setPosition(designSettings.position)
-  }, [designSettings.position.x, designSettings.position.y])
+    if (isLegacyDesign(designSettings)) {
+      setPosition(designSettings.position)
+    }
+  }, [designSettings])
 
   // 黒板の実際のサイズを監視（デバッグ用）
   useEffect(() => {
@@ -253,6 +262,20 @@ export default function DraggableBlackboard({
       }
     }
   }, [isDragging, isResizing, position, size])
+
+  // ✅ Union型保護: LayoutConfigは編集未対応（レガシー専用）- Hooksの後に配置
+  if (!isLegacyDesign(designSettings)) {
+    return (
+      <div className="rounded-lg border-2 border-amber-500 bg-amber-50 p-6 text-center">
+        <div className="text-amber-800 font-semibold mb-2">
+          ⚠️ このテンプレートは新レイアウト方式のため、編集は未対応です
+        </div>
+        <div className="text-sm text-amber-600">
+          新レイアウト方式のテンプレートは閲覧のみ可能です。編集機能は今後実装予定です。
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div

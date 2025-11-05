@@ -1,17 +1,12 @@
 // lib/db/sshMysql.ts
 import { Client } from "ssh2";
 import mysql from "mysql2/promise";
+import net from "net";
 import fs from "fs";
 import os from "os";
 import path from "path";
 
 type DoWithConn<T> = (conn: mysql.Connection) => Promise<T>;
-
-function mustEnv(key: string, fallback?: string) {
-  const v = process.env[key] ?? fallback;
-  if (!v) throw new Error(`Missing env ${key}`);
-  return v;
-}
 
 function readPrivateKey(): Buffer {
   // 優先1: 環境変数にB64格納（.env.localで SSH_PRIVATE_KEY_B64 を設定しても使える）
@@ -26,59 +21,98 @@ function readPrivateKey(): Buffer {
 }
 
 /**
- * SSH踏み台経由でMySQLに接続して処理を実行。
- * リクエスト毎に確立/終了（開きっぱなしにしない）。
+ * ローカルポート13306に実際にクエリが通るかテスト
+ */
+async function canQueryLocal(): Promise<boolean> {
+  const port = Number(process.env.DB_PORT ?? 13306);
+  // 1) TCP接続
+  const tcpOk = await new Promise<boolean>((res) => {
+    const s = net.createConnection({ host: "127.0.0.1", port, timeout: 600 }, () => { s.end(); res(true); });
+    s.on("error", () => res(false));
+    s.on("timeout", () => { s.destroy(); res(false); });
+  });
+  if (!tcpOk) return false;
+
+  // 2) 実クエリ
+  try {
+    const conn = await mysql.createConnection({
+      host: "127.0.0.1",
+      port,
+      user: process.env.DB_USER ?? "dandoliworks",
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME ?? "dandolijp",
+      connectTimeout: 1200,
+    });
+    await conn.query("SELECT 1");
+    await conn.end();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * MySQL接続（自動フォールバック: local → SSH）
+ * 環境変数 DB_MODE=local|ssh|auto で強制指定可能
  */
 export async function withSshMysql<T>(doWork: DoWithConn<T>): Promise<T> {
-  const ssh = new Client();
+  if (!process.env.DB_PASSWORD) throw new Error("DB_PASSWORD missing");
 
-  const sshConfig = {
-    host: process.env.SSH_HOST ?? "52.196.65.142",
-    port: Number(process.env.SSH_PORT ?? "22"),
-    username: process.env.SSH_USER ?? "dandolijp",
-    privateKey: readPrivateKey(),
-    // passphrase: process.env.SSH_PASSPHRASE, // 必要なら使用
-    keepaliveInterval: 30_000,
-    keepaliveCountMax: 2,
-  } as const;
+  // 環境で強制指定可: DB_MODE=local|ssh|auto
+  const mode = (process.env.DB_MODE ?? "auto").toLowerCase();
 
-  const dbHost = process.env.DB_REMOTE_HOST ?? "stg-work-db.dandoli.jp";
-  const dbPort = Number(process.env.DB_REMOTE_PORT ?? 3306);
-  const dbUser = process.env.DB_USER ?? "dandoliworks";
-  const dbPass = mustEnv("DB_PASSWORD"); // 既に .env.local に設定済み想定
-  const dbName = process.env.DB_NAME ?? "dandolijp";
-
-  // 1) SSH接続
-  await new Promise<void>((resolve, reject) => {
-    ssh.once("ready", () => resolve()).once("error", reject).connect(sshConfig);
-  });
-
-  try {
-    // 2) 踏み台からDBホスト:ポートへポートフォワードを開く
-    const stream: any = await new Promise((resolve, reject) => {
-      ssh.forwardOut(
-        "127.0.0.1",
-        0,
-        dbHost,
-        dbPort,
-        (err, s) => (err ? reject(err) : resolve(s))
-      );
-    });
-
-    // 3) MySQL接続（sshの転送ストリームを使用）
+  const tryLocal = async () => {
     const conn = await mysql.createConnection({
-      user: dbUser,
-      password: dbPass,
-      database: dbName,
-      stream,
+      host: "127.0.0.1",
+      port: Number(process.env.DB_PORT ?? 13306),
+      user: process.env.DB_USER ?? "dandoliworks",
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME ?? "dandolijp",
+      connectTimeout: 1500,
     });
+    try { return await doWork(conn); } finally { await conn.end(); }
+  };
 
+  const trySsh = async () => {
+    const ssh = new Client();
+    await new Promise<void>((resolve, reject) => {
+      ssh.once("ready", () => resolve()).once("error", reject).connect({
+        host: process.env.SSH_HOST ?? "52.196.65.142",
+        port: Number(process.env.SSH_PORT ?? 22),
+        username: process.env.SSH_USER ?? "dandolijp",
+        privateKey: readPrivateKey(),
+        keepaliveInterval: 30000,
+        keepaliveCountMax: 2,
+      });
+    });
     try {
-      return await doWork(conn);
+      const stream: any = await new Promise((resolve, reject) => {
+        ssh.forwardOut("127.0.0.1", 0,
+          process.env.DB_REMOTE_HOST ?? "stg-work-db.dandoli.jp",
+          Number(process.env.DB_REMOTE_PORT ?? 3306),
+          (err, s) => err ? reject(err) : resolve(s));
+      });
+      const conn = await mysql.createConnection({
+        user: process.env.DB_USER ?? "dandoliworks",
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME ?? "dandolijp",
+        stream,
+        connectTimeout: 3000,
+      });
+      try { return await doWork(conn); } finally { await conn.end(); }
     } finally {
-      await conn.end();
+      ssh.end();
     }
-  } finally {
-    ssh.end();
+  };
+
+  if (mode === "local") return tryLocal();
+  if (mode === "ssh") return trySsh();
+
+  // auto: 実接続で選択
+  if (await canQueryLocal()) {
+    (global as any).__DB_MODE_LAST = "local";
+    return tryLocal();
   }
+  (global as any).__DB_MODE_LAST = "ssh";
+  return trySsh();
 }

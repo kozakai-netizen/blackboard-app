@@ -1,9 +1,24 @@
 // components/BlackboardPreview.tsx
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { BlackboardInfo, Template } from '@/types';
 import { blackboardInfoToData } from '@/lib/blackboard-utils';
+import {
+  initCanvasDPR,
+  percentToNorm,
+  normToPercent,
+  pointCssToNorm,
+  resolveBlackboardRect,
+  toDrawSpace,
+  clamp01,
+  type NormRect,
+} from '@/lib/blackboard-layout';
+import { computeContainFit, type ContainFit } from '@/lib/contain-fit';
+import { ensureFonts } from '@/lib/font-loader';
+import { drawTemplateBlackboardWithLayout } from '@/lib/draw-with-layout';
+import { renderBlackboardCompat } from '@/lib/render-blackboard';
+import { isLegacyDesign } from '@/types/type-guards';
 
 interface BlackboardPreviewProps {
   imageFile: File | null;
@@ -20,6 +35,110 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
+  const rafRef = useRef<number>(0);
+  const pendingPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  // contain-fit計算結果をキャッシュ（描画とドラッグで同じ値を使う）
+  const lastFitRef = useRef<ContainFit | null>(null);
+
+  // 描画関数（useCallbackでメモ化、リサイズ時にも呼ばれる）
+  const drawCanvas = useCallback(async () => {
+    if (!loadedImage || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+
+    console.debug('BlackboardPreview: Drawing canvas', {
+      hasTemplate: !!template,
+      templateName: template?.name
+    });
+
+    // フォント読み込み完了を待つ（初回のみ）
+    await ensureFonts();
+
+    // DPR対応でCanvas初期化（CSS座標系統一）
+    const ctx = initCanvasDPR(canvas);
+    if (!ctx) {
+      console.log('BlackboardPreview: Failed to initialize canvas');
+      return;
+    }
+
+    // Canvas CSS座標を取得（initCanvasDPRの後）
+    const rect = canvas.getBoundingClientRect();
+    const canvasW = rect.width;
+    const canvasH = rect.height;
+
+    // 画像をcontain-fitで描画（統一関数を使用）
+    const imgW = loadedImage.width;
+    const imgH = loadedImage.height;
+    const fit = computeContainFit(imgW, imgH, canvasW, canvasH);
+
+    // contain-fit結果をキャッシュ（ドラッグ処理で同じ値を使う）
+    lastFitRef.current = fit;
+
+    // ★ DPRを最低1に固定（ブラウザズーム対策）
+    const dprRaw = window.devicePixelRatio || 1;
+    const dpr = Math.max(1, dprRaw);
+
+    // 解像度調査用ログ
+    console.debug('[BLACKBOARD_PREVIEW] 🔴 座標系検証 (CSS座標系)', {
+      '画像': { w: imgW, h: imgH },
+      'CSS座標': { w: canvasW, h: canvasH },
+      'DPR（生値）': dprRaw,
+      'DPR（clamp後）': dpr,
+      'Canvas物理ピクセル': { w: canvas.width, h: canvas.height },
+      'contain-fit結果（CSS座標）': { ...fit },
+      '高さ計算に使用': `fit.drawW=${fit.drawW.toFixed(1)}px, fit.drawH=${fit.drawH.toFixed(1)}px`,
+      'スムージング': {
+        enabled: ctx.imageSmoothingEnabled,
+        quality: (ctx as any).imageSmoothingQuality
+      }
+    });
+
+    // 画像品質設定
+    ctx.imageSmoothingEnabled = true;
+    (ctx as any).imageSmoothingQuality = 'high';
+
+    // 背景を黒で塗りつぶし（レターボックス対応）
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    // 画像を中央配置で描画
+    ctx.drawImage(loadedImage, fit.dx, fit.dy, fit.drawW, fit.drawH);
+
+    console.debug('BlackboardPreview: Image drawn with contain-fit', {
+      imgW,
+      imgH,
+      canvasW,
+      canvasH,
+      fit,
+      scaleCheck: Math.abs(fit.scale * imgW - fit.drawW) < 0.01 // 整合性チェック（浮動小数点誤差考慮）
+    });
+
+    // 黒板を描画（画像の相対位置dx/dyを考慮）
+    if (template) {
+      // ★ GPT先生のB案：段階的統合 - layout_idがあれば新システム、なければ旧システム
+      if (template.layout_id) {
+        console.debug('BlackboardPreview: Drawing with NEW layout system', {
+          templateName: template.name,
+          layoutId: template.layout_id
+        });
+        drawTemplateBlackboardWithLayout(ctx, blackboardInfo, canvasW, canvasH, template, fit);
+      } else {
+        console.debug('BlackboardPreview: Drawing with OLD template system', template.name);
+        await renderBlackboardCompat(ctx, blackboardInfo, canvasW, canvasH, template, fit.dx, fit.dy, fit.drawW, fit.drawH);
+      }
+    } else {
+      console.debug('BlackboardPreview: Drawing without template (legacy)');
+      // テンプレートなしの場合もfacadeを使用（Union型安全）
+      await renderBlackboardCompat(ctx, blackboardInfo, canvasW, canvasH, undefined, fit.dx, fit.dy, fit.drawW, fit.drawH);
+    }
+
+    console.debug('BlackboardPreview: Drawing complete');
+  }, [
+    loadedImage,
+    blackboardInfo,
+    template
+  ]);
 
   // 画像読み込み（imageFileが変わった時のみ）
   useEffect(() => {
@@ -48,60 +167,45 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
     };
   }, [imageFile]);
 
-  // Canvas描画（黒板情報が変わった時）
+  // Canvas描画（blackboardInfoまたはtemplateが変わった時）
   useEffect(() => {
-    if (!loadedImage || !canvasRef.current) {
-      return;
-    }
+    drawCanvas();
+  }, [drawCanvas]);
 
+  // ResizeObserver（ウィンドウリサイズ/ブラウザズーム/DPR変化に追従）
+  useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.log('BlackboardPreview: Failed to get 2d context');
-      return;
-    }
+    if (!canvas) return;
 
-    console.log('BlackboardPreview: Drawing canvas', {
-      hasTemplate: !!template,
-      templateName: template?.name
+    const parentEl = canvas.parentElement;
+    if (!parentEl) return;
+
+    const ro = new ResizeObserver(() => {
+      console.debug('BlackboardPreview: Resize detected, redrawing...');
+      // lastFitを無効化して再計算
+      lastFitRef.current = null;
+      // 再描画
+      drawCanvas();
     });
 
-    // Canvasサイズを設定
-    canvas.width = loadedImage.width;
-    canvas.height = loadedImage.height;
+    ro.observe(parentEl);
 
-    // 画像を描画
-    ctx.drawImage(loadedImage, 0, 0);
+    return () => {
+      ro.disconnect();
+    };
+  }, [drawCanvas]);
 
-    // 黒板を描画
-    if (template) {
-      console.log('BlackboardPreview: Drawing with template', template.name);
-      drawTemplateBlackboard(ctx, blackboardInfo, canvas.width, canvas.height, template);
-    } else {
-      console.log('BlackboardPreview: Drawing without template (legacy)');
-      drawBlackboard(ctx, blackboardInfo, canvas.width, canvas.height);
-    }
+  // Cleanup時にrAFをキャンセル
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    };
+  }, []);
 
-    console.log('BlackboardPreview: Drawing complete');
-  }, [
-    loadedImage,
-    blackboardInfo.projectName,
-    blackboardInfo.workType,
-    blackboardInfo.weather,
-    blackboardInfo.workContent,
-    blackboardInfo.timestamp?.getTime(),
-    blackboardInfo.workCategory,
-    blackboardInfo.workDetail,
-    blackboardInfo.contractor,
-    blackboardInfo.location,
-    blackboardInfo.station,
-    blackboardInfo.witness,
-    blackboardInfo.remarks,
-    template?.id,
-    template?.designSettings.position.x,
-    template?.designSettings.position.y
-  ]);
-
+  // ✅ 全Hooksの後に早期returnを配置（Reactのルール）
   if (!imageFile) {
     return (
       <div className="bg-gray-100 rounded-lg p-8 text-center text-gray-500">
@@ -110,79 +214,170 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
     );
   }
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!template || !onPositionChange) return;
+  // Pointer Events + rAF対応ドラッグハンドラー
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!template || !onPositionChange || !canvasRef.current || !lastFitRef.current) return;
+
+    // ✅ 新レイアウトシステムまたはUnion型保護: ドラッグは旧システムのみ対応
+    if (template.layout_id || !isLegacyDesign(template.designSettings)) {
+      console.warn('⚠️ ドラッグは旧システムのみ対応');
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
 
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
 
-    // 黒板の範囲内かチェック（drawTemplateBlackboardと同じ計算ロジックを使用）
-    const fields = template.fields;
-    const bbWidth = (canvas.width * template.designSettings.width) / 100;
+    // Pointer captureで確実に追従
+    canvas.setPointerCapture(e.pointerId);
 
-    // 動的高さ計算（drawTemplateBlackboardと同じロジック）
-    const baseHeight = bbWidth * 0.12;
-    const otherFields = fields.filter(f => f !== '工事名' && f !== '備考');
-    const rowCount = Math.ceil(otherFields.length / 2);
-    const gridItemHeight = bbWidth * 0.09;
-    const remarksHeight = fields.includes('備考') ? bbWidth * 0.15 : 0;
-    const gaps = bbWidth * 0.02 * (rowCount - 1 + (remarksHeight > 0 ? 1 : 0));
+    // キャッシュされたcontain-fit結果を使用（描画時と完全に同じ値）
+    const fit = lastFitRef.current;
 
-    const calculatedHeight =
-      bbWidth * 0.05 * 2 + // 上下余白
-      baseHeight + // 工事名
-      (rowCount > 0 ? bbWidth * 0.03 : 0) +
-      rowCount * gridItemHeight +
-      gaps +
-      remarksHeight;
+    // マウス座標（Canvas全体を基準）
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-    const minHeightPercent = (calculatedHeight / canvas.height) * 100;
-    const heightPercent = Math.max(template.designSettings.height, minHeightPercent);
-    const bbHeight = (canvas.height * heightPercent) / 100;
+    // 画像領域内の相対座標に変換
+    const relX = mouseX - fit.dx;
+    const relY = mouseY - fit.dy;
 
-    const bbX = (canvas.width * template.designSettings.position.x) / 100;
-    const bbY = (canvas.height * template.designSettings.position.y) / 100;
+    // 正規化座標（画像領域を0-1に）
+    const normX = relX / fit.drawW;
+    const normY = relY / fit.drawH;
 
-    // 黒板内部でのクリック位置をパーセンテージで保存
-    if (mouseX >= bbX && mouseX <= bbX + bbWidth && mouseY >= bbY && mouseY <= bbY + bbHeight) {
-      const offsetX = ((mouseX - bbX) / canvas.width) * 100;
-      const offsetY = ((mouseY - bbY) / canvas.height) * 100;
+    // 現在の黒板矩形（正規化座標に変換）
+    // ここでdesignSettingsはBlackboardDesignSettings確定（型ガード後）
+    const bbNorm = percentToNorm(template.designSettings);
+
+    // 高さを再計算して確定（画像の描画領域を基準に）
+    const finalRect = resolveBlackboardRect(
+      bbNorm,
+      template.fields,
+      fit.drawW,
+      fit.drawH
+    );
+
+    // 黒板内クリック判定（正規化座標で比較）
+    if (
+      normX >= finalRect.x &&
+      normX <= finalRect.x + finalRect.w &&
+      normY >= finalRect.y &&
+      normY <= finalRect.y + finalRect.h
+    ) {
+      const offsetX = normX - finalRect.x;
+      const offsetY = normY - finalRect.y;
       setIsDragging(true);
       setDragStart({ x: offsetX, y: offsetY });
+
+      console.debug('[DRAG] 🔴 ドラッグ開始 (CSS座標系)', {
+        'マウス位置（CSS）': { x: mouseX, y: mouseY },
+        '画像オフセット（CSS）': { dx: fit.dx, dy: fit.dy },
+        '正規化座標（0-1）': { x: normX.toFixed(4), y: normY.toFixed(4) },
+        '黒板矩形（正規化）': finalRect,
+        'ドラッグオフセット': { x: offsetX.toFixed(4), y: offsetY.toFixed(4) }
+      });
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !template || !onPositionChange) return;
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !template || !onPositionChange || !canvasRef.current || !lastFitRef.current) return;
+
+    // ✅ 新レイアウトシステムまたはUnion型保護: ドラッグは旧システムのみ対応
+    if (template.layout_id || !isLegacyDesign(template.designSettings)) {
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
 
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
+    const fit = lastFitRef.current;
 
-    // マウス位置からdragStartオフセットを引いた位置が新しい黒板位置
-    const newX = (mouseX / canvas.width) * 100 - dragStart.x;
-    const newY = (mouseY / canvas.height) * 100 - dragStart.y;
+    // ★マウス座標（CSS座標）
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-    onPositionChange({ x: Math.max(0, Math.min(100, newX)), y: Math.max(0, Math.min(100, newY)) });
+    // ★現在の黒板矩形をfit基準のpx座標で取得（描画時と同じ計算）
+    // ここでdesignSettingsはBlackboardDesignSettings確定（型ガード後）
+    const bbNorm = percentToNorm(template.designSettings);
+    const finalRect = resolveBlackboardRect(bbNorm, template.fields, fit.drawW, fit.drawH);
+
+    // ★fit領域基準のpx座標に変換
+    const bbPx = {
+      x: fit.dx + finalRect.x * fit.drawW,
+      y: fit.dy + finalRect.y * fit.drawH,
+      w: finalRect.w * fit.drawW,
+      h: finalRect.h * fit.drawH
+    };
+
+    // ★マウス位置から黒板の新しい左上座標を計算（px）
+    const newPxX = mouseX - dragStart.x * bbPx.w;  // dragStart.xは黒板内の相対位置(0-1)
+    const newPxY = mouseY - dragStart.y * bbPx.h;
+
+    // ★fit領域内に収める（黒板が画像からはみ出さないように）
+    const clampedPxX = Math.max(fit.dx, Math.min(fit.dx + fit.drawW - bbPx.w, newPxX));
+    const clampedPxY = Math.max(fit.dy, Math.min(fit.dy + fit.drawH - bbPx.h, newPxY));
+
+    // ★fit基準のpx座標 → 正規化座標(0-1)に逆変換
+    const normX = (clampedPxX - fit.dx) / fit.drawW;
+    const normY = (clampedPxY - fit.dy) / fit.drawH;
+
+    // ★エッジ吸着（正規化座標で）
+    const eps = 0.002;
+    let finalNormX = normX;
+    let finalNormY = normY;
+
+    if (Math.abs(normX) < eps) finalNormX = 0;
+    if (Math.abs(normY) < eps) finalNormY = 0;
+    if (Math.abs(1 - (normX + finalRect.w)) < eps) finalNormX = 1 - finalRect.w;
+    if (Math.abs(1 - (normY + finalRect.h)) < eps) finalNormY = 1 - finalRect.h;
+
+    // rAFでバッファリング（スムーズなドラッグ）
+    pendingPosRef.current = { x: finalNormX, y: finalNormY };
+
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => {
+        if (pendingPosRef.current) {
+          // ★%に戻して保存（fit基準0-1 → %）
+          const percentPos = {
+            x: pendingPosRef.current.x * 100,
+            y: pendingPosRef.current.y * 100
+          };
+          onPositionChange(percentPos);
+          console.debug('[DRAG] 🔴 位置更新 (fit基準・CSS座標系)', {
+            '正規化座標（0-1）': pendingPosRef.current,
+            'パーセント座標（保存用）': percentPos,
+            '座標系': 'CSS (initCanvasDPR使用)'
+          });
+        }
+        rafRef.current = 0;
+      });
+    }
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isDragging && canvasRef.current) {
+      canvasRef.current.releasePointerCapture(e.pointerId);
+      setIsDragging(false);
+
+      // 最後の更新を即座に適用
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+
+        if (pendingPosRef.current && onPositionChange) {
+          const percentPos = {
+            x: pendingPosRef.current.x * 100,
+            y: pendingPosRef.current.y * 100
+          };
+          onPositionChange(percentPos);
+        }
+      }
+    }
   };
 
   return (
@@ -234,10 +429,11 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
           <canvas
             ref={canvasRef}
             className={`w-full h-auto rounded shadow-lg ${isDragging ? 'cursor-grabbing' : onPositionChange ? 'cursor-grab' : ''}`}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{ touchAction: 'none' }}
           />
         </div>
       </div>
@@ -251,307 +447,8 @@ export function BlackboardPreview({ imageFile, blackboardInfo, template, onPrevi
 }
 
 /**
- * テンプレート対応の黒板描画
+ * Helper: hex color to rgba
  */
-function drawTemplateBlackboard(
-  ctx: CanvasRenderingContext2D,
-  info: BlackboardInfo,
-  canvasWidth: number,
-  canvasHeight: number,
-  template: Template
-) {
-  console.log('drawTemplateBlackboard: START', {
-    canvasWidth,
-    canvasHeight,
-    template: template.name,
-    fields: template.fields,
-    info
-  });
-
-  const { designSettings, fields } = template;
-  const data = blackboardInfoToData(info);
-
-  console.log('drawTemplateBlackboard: Converted data', {
-    data,
-    工事名: data.工事名,
-    工種: data.工種,
-    天候: data.天候
-  });
-
-  // 黒板の幅を計算
-  const bbWidth = (canvasWidth * designSettings.width) / 100;
-
-  // 必要な高さを動的に計算
-  const baseHeight = bbWidth * 0.12; // 工事名の高さ
-  const otherFields = fields.filter(f => f !== '工事名' && f !== '備考');
-  const rowCount = Math.ceil(otherFields.length / 2); // 2列グリッド
-  const itemHeight = bbWidth * 0.09; // 各項目の高さ
-  const remarksHeight = fields.includes('備考') && data.備考 ? bbWidth * 0.15 : 0;
-  const bbPadding = bbWidth * 0.015;
-  const gaps = bbWidth * 0.02 * (rowCount - 1 + (remarksHeight > 0 ? 1 : 0));
-
-  const calculatedHeight =
-    bbWidth * 0.05 * 2 + // 上下余白
-    baseHeight + // 工事名
-    (rowCount > 0 ? bbWidth * 0.03 : 0) + // 工事名とその他の間
-    rowCount * itemHeight + // その他項目
-    gaps + // 項目間のギャップ
-    remarksHeight; // 備考
-
-  // designSettings.heightと計算した高さの大きい方を使用
-  const minHeightPercent = (calculatedHeight / canvasHeight) * 100;
-  const heightPercent = Math.max(designSettings.height, minHeightPercent);
-  const bbHeight = (canvasHeight * heightPercent) / 100;
-
-  const bbX = (canvasWidth * designSettings.position.x) / 100;
-  let bbY = (canvasHeight * designSettings.position.y) / 100;
-
-  // 黒板が画像からはみ出す場合は上に移動
-  if (bbY + bbHeight > canvasHeight) {
-    bbY = Math.max(0, canvasHeight - bbHeight - bbPadding);
-    console.warn('⚠️ Blackboard adjusted to fit canvas', {
-      originalY: designSettings.position.y,
-      adjustedY: (bbY / canvasHeight) * 100
-    });
-  }
-
-  console.log('drawTemplateBlackboard: Blackboard dimensions', {
-    bbWidth,
-    bbHeight,
-    bbX,
-    bbY,
-    calculatedHeight,
-    minHeightPercent: minHeightPercent.toFixed(2) + '%',
-    usedHeightPercent: heightPercent.toFixed(2) + '%',
-    canvasWidth,
-    canvasHeight
-  });
-
-  // 背景色（透明度を適用）
-  const opacity = (designSettings.opacity || 85) / 100;
-  ctx.fillStyle = hexToRgba(designSettings.bgColor, opacity);
-  ctx.fillRect(bbX, bbY, bbWidth, bbHeight);
-
-  // 白枠
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-  ctx.lineWidth = Math.max(2, bbWidth * 0.008);
-  ctx.strokeRect(bbX, bbY, bbWidth, bbHeight);
-
-  // 内側のシャドウ効果
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-  const padding = bbWidth * 0.015; // 余白を半分に
-  ctx.fillRect(bbX + padding, bbY + padding, bbWidth - padding * 2, bbHeight - padding * 2);
-
-  // フォントサイズ（幅ベースで計算）
-  const baseFontSize = designSettings.fontSize === 'large'
-    ? Math.floor(bbWidth * 0.055) // 大: 幅の5.5%
-    : Math.floor(bbWidth * 0.042); // 標準: 幅の4.2%
-  const labelFontSize = Math.floor(baseFontSize * 0.9);
-  const valueFontSize = Math.floor(baseFontSize * 0.85);
-
-  ctx.fillStyle = designSettings.textColor;
-  ctx.textBaseline = 'top';
-
-  let currentY = bbY + bbHeight * 0.05; // 上余白を減らす
-
-  // 工事名を全幅で表示
-  if (fields.includes('工事名')) {
-    const projectName = data.工事名 || '○○マンション新築工事';
-    const itemHeight = bbHeight * 0.12;
-
-    // 背景
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(bbX + padding, currentY, bbWidth - padding * 2, itemHeight);
-
-    // 白枠
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = Math.max(1, bbWidth * 0.003);
-    ctx.strokeRect(bbX + padding, currentY, bbWidth - padding * 2, itemHeight);
-
-    // ラベル背景
-    const labelWidth = bbWidth * 0.15;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.fillRect(bbX + padding, currentY, labelWidth, itemHeight);
-
-    // ラベル右側の線
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = Math.max(1, bbWidth * 0.003);
-    ctx.beginPath();
-    ctx.moveTo(bbX + padding + labelWidth, currentY);
-    ctx.lineTo(bbX + padding + labelWidth, currentY + itemHeight);
-    ctx.stroke();
-
-    // ラベルテキスト
-    ctx.fillStyle = designSettings.textColor;
-    ctx.font = `bold ${labelFontSize}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('工事名', bbX + padding + labelWidth / 2, currentY + itemHeight * 0.3);
-
-    // 値テキスト
-    ctx.textAlign = 'left';
-    ctx.font = `${valueFontSize}px sans-serif`;
-    const valueText = truncateText(ctx, projectName, bbWidth - padding * 2 - labelWidth - bbWidth * 0.05);
-    ctx.fillText(valueText, bbX + padding + labelWidth + bbWidth * 0.03, currentY + itemHeight * 0.3);
-
-    currentY += itemHeight + bbHeight * 0.03;
-  }
-
-  // その他の項目を2列グリッドで表示（備考を除く）
-  // otherFieldsは既に上で定義済み
-  const itemWidth = (bbWidth - padding * 2 - bbWidth * 0.02) / 2;
-  const gridItemHeight = bbHeight * 0.09;
-  const gap = bbWidth * 0.02;
-
-  otherFields.forEach((fieldId, index) => {
-    const col = index % 2;
-    const row = Math.floor(index / 2);
-
-    const itemX = bbX + padding + col * (itemWidth + gap);
-    const itemY = currentY + row * (gridItemHeight + bbHeight * 0.02);
-
-    // 背景
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(itemX, itemY, itemWidth, gridItemHeight);
-
-    // 白枠
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = Math.max(1, bbWidth * 0.002);
-    ctx.strokeRect(itemX, itemY, itemWidth, gridItemHeight);
-
-    // ラベル背景
-    const labelWidth = itemWidth * 0.25;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.fillRect(itemX, itemY, labelWidth, gridItemHeight);
-
-    // ラベル右側の線
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = Math.max(1, bbWidth * 0.002);
-    ctx.beginPath();
-    ctx.moveTo(itemX + labelWidth, itemY);
-    ctx.lineTo(itemX + labelWidth, itemY + gridItemHeight);
-    ctx.stroke();
-
-    // ラベルテキスト
-    ctx.fillStyle = designSettings.textColor;
-    ctx.font = `bold ${labelFontSize * 0.8}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(fieldId, itemX + labelWidth / 2, itemY + gridItemHeight * 0.35);
-
-    // 値テキスト
-    ctx.textAlign = 'left';
-    ctx.font = `${valueFontSize * 0.85}px sans-serif`;
-    const value = (data[fieldId as keyof typeof data] as string) ||
-                 (fieldId === '撮影日' ? info.timestamp.toLocaleDateString('ja-JP') : '－');
-    const valueText = truncateText(ctx, value, itemWidth - labelWidth - itemWidth * 0.1);
-    ctx.fillText(valueText, itemX + labelWidth + itemWidth * 0.05, itemY + gridItemHeight * 0.35);
-  });
-
-  // 備考を黒板下部全幅で表示（高さを2倍に）
-  if (fields.includes('備考') && data.備考) {
-    const remarksY = currentY + Math.ceil(otherFields.length / 2) * (gridItemHeight + bbHeight * 0.02) + bbHeight * 0.03;
-    const remarksDisplayHeight = bbHeight * 0.15;
-
-    // 背景
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(bbX + padding, remarksY, bbWidth - padding * 2, remarksDisplayHeight);
-
-    // 白枠
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = Math.max(1, bbWidth * 0.003);
-    ctx.strokeRect(bbX + padding, remarksY, bbWidth - padding * 2, remarksDisplayHeight);
-
-    // ラベル背景
-    const labelWidth = bbWidth * 0.1;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.fillRect(bbX + padding, remarksY, labelWidth, remarksDisplayHeight);
-
-    // ラベル右側の線
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.beginPath();
-    ctx.moveTo(bbX + padding + labelWidth, remarksY);
-    ctx.lineTo(bbX + padding + labelWidth, remarksY + remarksDisplayHeight);
-    ctx.stroke();
-
-    // ラベルテキスト
-    ctx.fillStyle = designSettings.textColor;
-    ctx.font = `bold ${labelFontSize * 0.8}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText('備考', bbX + padding + labelWidth / 2, remarksY + remarksDisplayHeight * 0.35);
-
-    // 値テキスト
-    ctx.textAlign = 'left';
-    ctx.font = `${valueFontSize * 0.85}px sans-serif`;
-    const remarksText = truncateText(ctx, data.備考, bbWidth - padding * 2 - labelWidth - bbWidth * 0.05);
-    ctx.fillText(remarksText, bbX + padding + labelWidth + bbWidth * 0.03, remarksY + remarksDisplayHeight * 0.35);
-  }
-
-  // SHA-256マーク
-  ctx.font = `${baseFontSize * 0.6}px monospace`;
-  ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-  ctx.textAlign = 'right';
-  ctx.fillText('SHA-256', bbX + bbWidth - padding * 2, bbY + bbHeight - bbHeight * 0.08);
-  ctx.textAlign = 'left';
-}
-
-/**
- * 従来の黒板描画（後方互換性）
- */
-function drawBlackboard(
-  ctx: CanvasRenderingContext2D,
-  info: BlackboardInfo,
-  width: number,
-  height: number
-) {
-  const blackboardHeight = height * 0.2;
-  const blackboardWidth = width * 0.8;
-  const xPosition = width * 0.03;
-  const yPosition = height * 0.8;
-
-  // 背景
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-  ctx.fillRect(xPosition, yPosition, blackboardWidth, blackboardHeight);
-
-  // 白枠
-  ctx.strokeStyle = 'white';
-  ctx.lineWidth = Math.max(2, width * 0.003);
-  ctx.strokeRect(xPosition, yPosition, blackboardWidth, blackboardHeight);
-
-  // テキスト
-  ctx.fillStyle = 'white';
-  ctx.textBaseline = 'top';
-  const baseFontSize = Math.floor(blackboardHeight * 0.2);
-  const smallFontSize = Math.floor(blackboardHeight * 0.15);
-
-  let y = yPosition + blackboardHeight * 0.1;
-  const lineHeight = baseFontSize * 1.2;
-
-  ctx.font = `bold ${baseFontSize}px sans-serif`;
-  ctx.fillText(truncateText(ctx, info.projectName, blackboardWidth * 0.9), xPosition + blackboardWidth * 0.05, y);
-  y += lineHeight;
-
-  // 工種と天候（オプショナル）
-  if (info.workType || info.weather) {
-    ctx.font = `bold ${baseFontSize}px sans-serif`;
-    const parts = [info.workType, info.weather].filter(Boolean);
-    ctx.fillText(parts.join(' | '), xPosition + blackboardWidth * 0.05, y);
-    y += lineHeight;
-  }
-
-  ctx.font = `${smallFontSize}px sans-serif`;
-  const dateStr = info.timestamp.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-  ctx.fillText(dateStr, xPosition + blackboardWidth * 0.05, y);
-
-  ctx.font = `${smallFontSize * 0.8}px monospace`;
-  ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-  ctx.fillText('SHA-256', xPosition + blackboardWidth * 0.65, yPosition + blackboardHeight * 0.85);
-}
-
 function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
