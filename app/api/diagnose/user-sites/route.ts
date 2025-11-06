@@ -1,49 +1,107 @@
-import { siteIncludesUserDetailed } from "@/lib/sites/match";
+import { buildKeySet, includesUserLoose, UserKeys } from '@/lib/sites/matchMine'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const id = Number(searchParams.get("id") ?? "0") || undefined;
-  const name = searchParams.get("name") ?? undefined;
-
-  // 1) ユーザーキー取得
-  const baseUrl = `http://localhost:${process.env.PORT || 3002}`;
-  const ukRes = await fetch(`${baseUrl}/api/stg-user-keys?${id ? `id=${id}` : `name=${encodeURIComponent(name || "")}`}`, { cache: "no-store" });
-  const uk = await ukRes.json();
-  const user = uk?.user ?? null;
-
-  // 2) 現場データ（DW → STG fallback）
-  let provider: "dandori" | "stg";
-  let sites: any[] = [];
   try {
-    const r = await fetch(`${baseUrl}/api/dandori/sites`, { cache: "no-store" });
-    if (r.ok) {
-      const j = await r.json();
-      if (Array.isArray(j?.data) && j.data.length) { sites = j.data; provider = "dandori" as const; }
-    }
-  } catch {}
-  if (!sites.length) {
-    const r2 = await fetch(`${baseUrl}/api/stg-sites?limit=200`, { cache: "no-store" });
-    const j2 = await r2.json().catch(() => ({}));
-    sites = j2?.sites ?? [];
-    provider = "stg";
+    const { searchParams } = new URL(req.url)
+    const userId = searchParams.get('user_id') || searchParams.get('id') || process.env.NEXT_PUBLIC_DEFAULT_USER_ID || '40824'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_PATH || `http://localhost:${process.env.PORT || 3002}`
+
+    // 1) ユーザーキー情報取得
+    const userKeysRes = await fetch(`${baseUrl}/api/stg-user-keys?id=${encodeURIComponent(userId)}`, { cache: 'no-store' })
+    const userKeysData = await userKeysRes.json()
+    const userKeys: UserKeys | null = userKeysData?.user
+      ? {
+          id: userKeysData.user.id,
+          employee_code: userKeysData.user.employee_code,
+          login_id: userKeysData.user.login_id
+        }
+      : null
+
+    const keySet = buildKeySet(userKeys)
+
+    // 2) 現場一覧取得（進行中の全件）
+    const sitesRes = await fetch(`${baseUrl}/api/sites/quicklist?q=&status=progress&per=100`, { cache: 'no-store' })
+    const sitesData = await sitesRes.json()
+    const sites = Array.isArray(sitesData?.items) ? sitesData.items : []
+
+    // 3) マッチング診断
+    const matched: any[] = []
+    const mismatched: any[] = []
+
+    sites.forEach((site: any) => {
+      const isMatch = includesUserLoose(site, keySet)
+      if (isMatch) {
+        matched.push({
+          site_code: site.site_code,
+          site_name: site.site_name,
+          status: site.status,
+          manager_id: site.manager_id
+        })
+      } else {
+        mismatched.push({
+          site_code: site.site_code,
+          site_name: site.site_name,
+          status: site.status,
+          manager_id: site.manager_id,
+          reason: detectMismatchReason(site, keySet)
+        })
+      }
+    })
+
+    return Response.json({
+      ok: true,
+      user_id: userId,
+      user_keys: userKeys,
+      key_set: Array.from(keySet),
+      total_sites: sites.length,
+      matched_count: matched.length,
+      mismatched_count: mismatched.length,
+      matched_samples: matched.slice(0, 5),
+      mismatched_samples: mismatched.slice(0, 5)
+    })
+  } catch (error: any) {
+    return Response.json(
+      {
+        ok: false,
+        error: error?.message || 'Unknown error'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+function detectMismatchReason(site: any, keys: Set<string>): string {
+  if (!site) return 'site is null'
+  if (keys.size === 0) return 'no user keys loaded'
+
+  const cands: string[] = []
+
+  // チェック対象のフィールド
+  if (site.manager_id) cands.push(`manager_id:${site.manager_id}`)
+  if (site.manager?.admin) cands.push(`manager.admin:${site.manager.admin}`)
+  if (site.manager?.chief) cands.push(`manager.chief:${site.manager.chief}`)
+  if (site.manager?.leader) cands.push(`manager.leader:${site.manager.leader}`)
+
+  for (let i = 1; i <= 3; i++) {
+    const subAdmin = site.manager?.[`sub_admin${i}`]
+    if (subAdmin) cands.push(`manager.sub_admin${i}:${subAdmin}`)
   }
 
-  // 3) 照合して理由を付ける
-  const reasons: any[] = [];
-  let matchCount = 0;
-  if (user) {
-    for (const s of sites.slice(0, 50)) { // 上位50件で十分
-      const m = siteIncludesUserDetailed(s, { id: user.id, employee_code: user.employee_code, login_id: user.login_id });
-      if (m.matched) { matchCount++; reasons.push({ id: s.id, name: s.name, reason: m.reason }); }
-    }
+  if (Array.isArray(site.casts) && site.casts.length > 0) {
+    cands.push(`casts[${site.casts.length}]`)
+  }
+  if (Array.isArray(site.workers) && site.workers.length > 0) {
+    cands.push(`workers[${site.workers.length}]`)
+  }
+  if (Array.isArray(site.flat) && site.flat.length > 0) {
+    cands.push(`flat[${site.flat.length}]`)
   }
 
-  return Response.json({
-    input: { id, name },
-    user,
-    provider,
-    totalSites: sites.length,
-    matchCount,
-    samples: reasons.slice(0, 10), // 上位10件だけ
-  });
+  if (cands.length === 0) {
+    return 'no candidates found in site data'
+  }
+
+  return `checked: ${cands.join(', ')} (no match with ${Array.from(keys).join(', ')})`
 }

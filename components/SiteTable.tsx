@@ -4,6 +4,8 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { fileStore } from '@/lib/fileStore';
+import { SiteChip } from '@/components/ui/SiteChip';
+import { statusVariant, typeVariant } from '@/lib/sites/chipStyle';
 
 interface Site {
   site_code: string;
@@ -83,33 +85,6 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
     e.target.value = '';
   };
 
-  // ステータスバッジの色を取得
-  const getStatusBadgeColor = (status?: string) => {
-    if (!status) return 'bg-gray-100 text-gray-800';
-
-    const normalizedStatus = status.trim();
-
-    if (normalizedStatus.includes('見積未提出') || normalizedStatus === '現調中（見積未提出）') {
-      return 'bg-yellow-100 text-yellow-800';
-    }
-    if (normalizedStatus.includes('見積提出済み') || normalizedStatus === '現調中（見積提出済み）') {
-      return 'bg-green-100 text-green-800';
-    }
-    if (normalizedStatus === '工事中' || normalizedStatus.includes('工事')) {
-      return 'bg-blue-100 text-blue-800';
-    }
-    if (normalizedStatus.includes('完工') || normalizedStatus === '完工') {
-      return 'bg-orange-100 text-orange-800';
-    }
-    if (normalizedStatus.includes('アフター') || normalizedStatus === 'アフター') {
-      return 'bg-purple-100 text-purple-800';
-    }
-    if (normalizedStatus.includes('中止') || normalizedStatus.includes('他決')) {
-      return 'bg-pink-100 text-pink-800';
-    }
-
-    return 'bg-gray-100 text-gray-800';
-  };
 
   // ソートアイコン
   const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
@@ -195,7 +170,10 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                   className="hover:bg-blue-50 hover:shadow-md transition-all cursor-pointer group"
                 >
                   <td className="px-6 py-5">
-                    <div className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                    <div
+                      data-testid="site-name"
+                      className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors"
+                    >
                       {site.site_name}
                     </div>
                     <div className="text-sm text-gray-500 mt-1">
@@ -204,39 +182,31 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                   </td>
                   <td className="px-6 py-5 text-base text-gray-600 hidden md:table-cell">
                     {site.site_type ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
-                        {site.site_type}
-                      </span>
+                      <SiteChip text={site.site_type} variant={typeVariant(site.site_type)} testId="site-type" />
                     ) : (
                       '-'
                     )}
                   </td>
                   <td className="px-6 py-5">
                     {site.status ? (
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeColor(site.status)}`}>
-                        {site.status}
-                      </span>
+                      <SiteChip text={site.status} variant={statusVariant(site.status)} testId="site-status" />
                     ) : (
                       '-'
                     )}
                   </td>
-                  <td className="px-6 py-5 text-base text-gray-600 hidden xl:table-cell">
-                    <div className="flex items-center gap-1">
-                      <span>📍</span>
-                      <span className="line-clamp-1">{site.address || '-'}</span>
-                    </div>
+                  <td
+                    data-testid="site-address"
+                    className="px-6 py-5 text-sm text-gray-600 hidden xl:table-cell"
+                  >
+                    <span className="line-clamp-1">{site.address || '-'}</span>
                   </td>
-                  <td className="px-6 py-5 text-base text-gray-600 hidden lg:table-cell">
-                    {site.manager_name ? (
-                      <div className="flex items-center gap-1">
-                        <span>👤</span>
-                        <span>{site.manager_name}</span>
-                      </div>
-                    ) : (
-                      '-'
-                    )}
+                  <td className="px-6 py-5 text-sm text-gray-600 hidden lg:table-cell">
+                    {site.manager_name || '-'}
                   </td>
-                  <td className="px-6 py-5 text-base text-gray-500 hidden sm:table-cell">
+                  <td
+                    data-testid="site-updated-at"
+                    className="px-6 py-5 text-sm text-gray-500 hidden sm:table-cell"
+                  >
                     {site.updated_at
                       ? new Date(site.updated_at).toLocaleDateString('ja-JP')
                       : '-'}

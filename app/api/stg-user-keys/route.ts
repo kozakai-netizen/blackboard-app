@@ -1,42 +1,74 @@
-import { withSshMysql } from "@/lib/db/sshMysql";
-import { detectUserColumns } from "@/lib/db/schema/users";
+import { NextResponse } from 'next/server';
+import mysql from 'mysql2/promise';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-  const name = searchParams.get("name");
+  const id = searchParams.get('id');
 
-  if (!id && !name) {
-    return new Response(JSON.stringify({ error: "id or name required" }), { status: 400 });
+  if (!id) {
+    return NextResponse.json({ ok: false, error: 'id parameter required' }, { status: 400 });
   }
 
+  console.log('[stg-user-keys] Fetching user for id:', id);
+
+  let conn;
   try {
-    const out = await withSshMysql(async (conn) => {
-      const map = await detectUserColumns(conn);
-      const fields = ["u.`id` AS id"];
-      if (map.name) fields.push(`u.\`${map.name}\` AS name`);
-      if (map.email) fields.push(`u.\`${map.email}\` AS email`);
-      if (map.employee_code) fields.push(`u.\`${map.employee_code}\` AS employee_code`);
-
-      const where: string[] = [];
-      const params: any[] = [];
-      if (id) { where.push("u.`id` = ?"); params.push(Number(id)); }
-      if (name) {
-        const cols = map.name ? [map.name] : map.nameCandidates;
-        if (cols.length) {
-          where.push("(" + cols.map(c => `u.\`${c}\` LIKE ?`).join(" OR ") + ")");
-          cols.forEach(() => params.push(`%${name}%`));
-        }
-      }
-
-      const sql = `SELECT ${fields.join(", ")} FROM users u ${where.length ? "WHERE " + where.join(" AND ") : ""} LIMIT 1`;
-      const [rows] = await conn.query<any[]>(sql, params);
-      const user = rows?.[0] ?? null;
-      return { user, columns: map };
+    // SSHトンネル経由でMySQLに接続（stg-usersと同じ方式）
+    conn = await mysql.createConnection({
+      host: 'localhost',
+      port: 13306,
+      user: process.env.DB_USER || 'dandoliworks',
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME || 'dandolijp',
     });
 
-    return Response.json(out);
+    // users + profiles テーブルから取得
+    const sql = `
+      SELECT
+        u.\`id\` AS user_id,
+        u.\`username\` AS login_id,
+        CONCAT(p.user_last_name, p.user_first_name) AS name
+      FROM users u
+      LEFT JOIN profiles p ON u.\`id\` = p.\`user_id\`
+      WHERE u.\`id\` = ?
+      LIMIT 1
+    `;
+
+    console.log('[stg-user-keys] Executing SQL:', sql, 'id:', id);
+
+    const [rows] = await conn.query<any[]>(sql, [Number(id)]);
+
+    if (!rows || rows.length === 0) {
+      console.log('[stg-user-keys] User not found');
+      return NextResponse.json({
+        ok: true,
+        user: null,
+        message: 'User not found'
+      });
+    }
+
+    const user = rows[0];
+    console.log('[stg-user-keys] Found user:', user);
+
+    return NextResponse.json({
+      ok: true,
+      user: {
+        id: String(user.user_id),
+        employee_code: user.login_id, // login_idをemployee_codeとして使用
+        login_id: user.login_id,
+        name: user.name,
+        email: null, // MySQLにはemailがないためnull
+        phone: null, // MySQLにはphoneがないためnull
+        level: null, // MySQLにはlevelがないためnull
+        permission: null // MySQLにはpermissionがないためnull
+      }
+    });
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message }), { status: 500 });
+    console.error('[stg-user-keys] Error:', e);
+    return NextResponse.json({ ok: false, error: e?.message || 'Internal error' }, { status: 500 });
+  } finally {
+    if (conn) {
+      await conn.end();
+    }
   }
 }

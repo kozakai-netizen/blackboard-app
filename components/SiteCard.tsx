@@ -3,6 +3,9 @@
 import { useRouter } from 'next/navigation'
 import { useRef } from 'react'
 import { fileStore } from '@/lib/fileStore'
+import { tone, cardSize } from '@/lib/ui/theme'
+import { SiteChip } from '@/components/ui/SiteChip'
+import { statusVariant, typeVariant } from '@/lib/sites/chipStyle'
 
 interface Site {
   site_code: string
@@ -78,34 +81,6 @@ export function SiteCard({ site, placeCode, onCardClick }: SiteCardProps) {
     return 'border-t-gray-300'
   }
 
-  const getStatusBadgeColor = (status?: string) => {
-    if (!status) return 'bg-gray-100 text-gray-800'
-
-    // trim して正規化
-    const normalizedStatus = status.trim()
-
-    // 部分一致も含めて判定
-    if (normalizedStatus.includes('見積未提出') || normalizedStatus === '現調中（見積未提出）') {
-      return 'bg-yellow-100 text-yellow-800'
-    }
-    if (normalizedStatus.includes('見積提出済み') || normalizedStatus === '現調中（見積提出済み）') {
-      return 'bg-green-100 text-green-800'
-    }
-    if (normalizedStatus === '工事中' || normalizedStatus.includes('工事')) {
-      return 'bg-blue-100 text-blue-800'
-    }
-    if (normalizedStatus.includes('完工') || normalizedStatus === '完工') {
-      return 'bg-orange-100 text-orange-800'
-    }
-    if (normalizedStatus.includes('アフター') || normalizedStatus === 'アフター') {
-      return 'bg-purple-100 text-purple-800'
-    }
-    if (normalizedStatus.includes('中止') || normalizedStatus.includes('他決')) {
-      return 'bg-pink-100 text-pink-800'
-    }
-
-    return 'bg-gray-100 text-gray-800'
-  }
 
   return (
     <>
@@ -121,44 +96,38 @@ export function SiteCard({ site, placeCode, onCardClick }: SiteCardProps) {
       <div
         onClick={handleCardClick}
         data-testid="site-card"
-        className={`bg-white rounded-lg shadow hover:shadow-lg transition-all p-5 border-l border-r border-b border-gray-200 cursor-pointer border-t-4 ${getStatusBorderColor(site.status)}`}
+        className={`${tone.surface} ${tone.cardPad} ${cardSize.maxW} cursor-pointer border-t-4 ${getStatusBorderColor(site.status)}`}
       >
-        {/* ステータスバッジ */}
-        <div className="flex items-center justify-between mb-3 gap-2">
-          {site.status && (
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(site.status)}`}>
-              {site.status}
-            </span>
-          )}
-          {site.site_type && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-300">
-              {site.site_type}
-            </span>
-          )}
-        </div>
-
         {/* 現場名 */}
-        <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
+        <h3
+          data-testid="site-name"
+          className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2 leading-tight"
+        >
           {site.site_name}
         </h3>
 
+        {/* チップ（種類とステータス） */}
+        <div className="flex flex-wrap gap-1 mb-2">
+          {site.site_type && <SiteChip text={site.site_type} variant={typeVariant(site.site_type)} testId="site-type" />}
+          {site.status && <SiteChip text={site.status} variant={statusVariant(site.status)} testId="site-status" />}
+        </div>
+
         {/* 住所 */}
         {site.address && (
-          <p className="text-sm text-gray-600 mb-3 line-clamp-1">
-            📍 {site.address}
-          </p>
-        )}
-
-        {/* 現場管理担当者 */}
-        {site.manager_name && (
-          <p className="text-sm text-gray-600 mb-3">
-            👤 {site.manager_name}
+          <p
+            data-testid="site-address"
+            className="text-xs text-gray-600 mt-2 line-clamp-1"
+          >
+            {site.address}
           </p>
         )}
 
         {/* 更新日 */}
         {site.updated_at && (
-          <p className="text-xs text-gray-500 mt-3">
+          <p
+            data-testid="site-updated-at"
+            className="text-xs text-gray-500 mt-1"
+          >
             更新: {new Date(site.updated_at).toLocaleDateString('ja-JP')}
           </p>
         )}
