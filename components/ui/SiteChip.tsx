@@ -15,5 +15,5 @@ export function SiteChip({ text, variant='neutral', testId }:{
     violet:  `${tone.chip} ${tone.chipViolet}`,
     indigo:  `${tone.chip} ${tone.chipIndigo}`,
   };
-  return <span className={map[variant]} data-testid={testId}>{text}</span>;
+  return <span className={map[variant]} data-testid={testId}>{text || '—'}</span>;
 }
