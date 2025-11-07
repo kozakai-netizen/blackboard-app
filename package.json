@@ -13,7 +13,11 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test --project=smoke",
     "test:e2e:debug": "playwright test --debug",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "ui:freeze": "node scripts/ui-freeze.js",
+    "ui:snapshot": "node scripts/ui-snapshot.js",
+    "ui:capture": "node scripts/ui-capture.js",
+    "ui:restore": "node scripts/ui-restore.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
