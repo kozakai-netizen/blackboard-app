@@ -7,20 +7,11 @@ const T_STG = 2500;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const DW_BASE = process.env.NEXT_PUBLIC_DW_API_BASE || 'https://api.dandoli.jp/api';
 
-// LRUキャッシュ: max=5,000 / TTL=10分 (旧DB用、互換性のため残す)
-const userCache = new LRUCache<string, any>({
-  max: 5000,
-  ttl: 10 * 60 * 1000, // 10分
-});
-
 // DW API ユーザーキャッシュ (place単位)
 const dwUsersCache = new LRUCache<string, Map<string, { name: string; username?: string }>>({
   max: 200,
   ttl: 10 * 60 * 1000, // 10分
 });
-
-let cacheHits = 0;
-let dbFetches = 0;
 
 const STATUS_MAP: Record<string, string> = {
   progress: "1,2,3",
@@ -186,7 +177,7 @@ export async function GET(req: Request) {
     dwUrlTried = dwUrl;
 
     // 1回目のfetch
-    let resp = dwToken
+    const resp = dwToken
       ? await withTimeout(
           fetch(dwUrl, { cache: "no-store", next: { revalidate: 0 } }),
           T_DW,
@@ -331,15 +322,6 @@ export async function GET(req: Request) {
     timings,
     debug: { dwStatus, dwUrl: dwUrlTried, retried, stgStatus, tokenSource, usersFrom: 'dw', usersMapStatus },
   }); // ← 必ず200
-}
-
-function resolveManager(managerId: string, byId: Map<string, any>, byUsername: Map<string, any>): string | undefined {
-  if (!managerId) return undefined;
-
-  const mid = String(managerId);
-  const user = byId.get(mid) || byUsername.get(mid);
-
-  return user?.name || `ID: #${mid}`;
 }
 
 function filterText(list: any[], q: string) {
