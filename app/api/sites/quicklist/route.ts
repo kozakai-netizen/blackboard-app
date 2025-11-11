@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
-import mysql from 'mysql2/promise';
 import { LRUCache } from 'lru-cache';
+import { getDwToken } from '@/lib/dw/token';
 
 const T_DW = 2500; // ms
 const T_STG = 2500;
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const DW_BASE = process.env.NEXT_PUBLIC_DW_API_BASE || 'https://api.dandoli.jp/api';
 
-// LRUキャッシュ: max=5,000 / TTL=10分
+// LRUキャッシュ: max=5,000 / TTL=10分 (旧DB用、互換性のため残す)
 const userCache = new LRUCache<string, any>({
   max: 5000,
+  ttl: 10 * 60 * 1000, // 10分
+});
+
+// DW API ユーザーキャッシュ (place単位)
+const dwUsersCache = new LRUCache<string, Map<string, { name: string; username?: string }>>({
+  max: 200,
   ttl: 10 * 60 * 1000, // 10分
 });
 
@@ -47,6 +55,88 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string) {
   ]);
 }
 
+/**
+ * DW APIからplace内のユーザー一覧を取得（キャッシュ付き）
+ */
+async function getDwUsersMap(placeCode: string, token?: string): Promise<Map<string, { name: string; username?: string }>> {
+  const cacheKey = `dw-users:${placeCode}`;
+  const cached = dwUsersCache.get(cacheKey);
+  if (cached) {
+    console.log(`[quicklist] DW users cache hit for place=${placeCode}`);
+    return cached;
+  }
+
+  // トークン解決（共通 or place個別）
+  const { token: bearer, source } = getDwToken(placeCode);
+  const useToken = token || bearer;
+  if (!useToken) {
+    console.warn('[quicklist] no DW token, users map empty', { placeCode, source });
+    const empty = new Map<string, { name: string; username?: string }>();
+    dwUsersCache.set(cacheKey, empty);
+    return empty;
+  }
+
+  // place内ユーザー一覧を一発取得
+  console.log(`[quicklist] Fetching DW users for place=${placeCode}`);
+  try {
+    const res = await fetch(`${DW_BASE}/co/places/${encodeURIComponent(placeCode)}/users`, {
+      headers: { Authorization: `Bearer ${useToken}` },
+      cache: 'no-store'
+    });
+
+    const map = new Map<string, { name: string; username?: string }>();
+    if (res.ok) {
+      const json = await res.json().catch(() => ({}));
+      const list = Array.isArray(json?.data) ? json.data : [];
+      console.log(`[quicklist] DW users fetched: ${list.length} users`);
+      for (const u of list) {
+        const code = String(u?.user_code ?? '').trim();
+        if (!code) continue;
+        const name = `${u?.user_last_name ?? ''}${u?.user_first_name ?? ''}`.trim();
+        map.set(code, { name, username: u?.username });
+      }
+    } else {
+      console.warn('[quicklist] DW users fetch failed', { placeCode, status: res.status });
+    }
+
+    dwUsersCache.set(cacheKey, map);
+    return map;
+  } catch (e: any) {
+    console.error('[quicklist] DW users fetch error', { placeCode, error: e?.message });
+    const empty = new Map<string, { name: string; username?: string }>();
+    dwUsersCache.set(cacheKey, empty);
+    return empty;
+  }
+}
+
+/**
+ * 現場データから member_keys を user_code ベースで生成
+ */
+function ensureMemberKeysFromSite(raw: any): string[] {
+  const out = new Set<string>();
+  const norm = (v: any) => (v ?? '').toString().trim();
+
+  // manager.*（admin / sub_admin1-3 / chief / leader など想定）
+  const m = raw?.manager || {};
+  [m.admin, m.sub_admin1, m.sub_admin2, m.sub_admin3, m.chief, m.leader]
+    .map(norm).filter(Boolean).forEach(v => out.add(v));
+
+  // casts / workers が配列なら user_code を回収
+  (Array.isArray(raw?.casts) ? raw.casts : []).forEach((x: any) => {
+    const c = norm(x?.cast || x?.user_code);
+    if (c) out.add(c);
+  });
+  (Array.isArray(raw?.workers) ? raw.workers : []).forEach((x: any) => {
+    const c = norm(x?.worker || x?.user_code);
+    if (c) out.add(c);
+  });
+
+  // 既に member_keys が来ていれば union
+  (Array.isArray(raw?.member_keys) ? raw.member_keys : []).map(norm).filter(Boolean).forEach(v => out.add(v));
+
+  return Array.from(out);
+}
+
 export async function GET(req: Request) {
   console.log('[quicklist] START');
   const { searchParams } = new URL(req.url);
@@ -54,44 +144,112 @@ export async function GET(req: Request) {
   const statusKey = searchParams.get("status") || "progress";
   const status = toStatusList(statusKey); // "progress" → "1,2,3"
   const per = Math.min(80, Number(searchParams.get("per") || "50"));
-  const placeCode = process.env.NEXT_PUBLIC_PLACE_CODE || "dandoli-sample1";
-  console.log('[quicklist] q:', q, 'statusKey:', statusKey, 'status:', status, 'per:', per);
+  const placeCode = (searchParams.get("place") || "").trim() || process.env.NEXT_PUBLIC_PLACE_CODE || "dandoli-sample1"; // ★必須
+  console.log('[quicklist] q:', q, 'statusKey:', statusKey, 'status:', status, 'per:', per, 'place:', placeCode);
 
   const timings: any = {};
   let items: any[] = [];
   let provider: "dandori" | "stg" | "none" = "none";
 
-  // 1) DW
+  // 1) DW（404/4xx/5xxリトライ付き）
+  let dwStatus = 0, stgStatus = 0;
+  let dwUrlTried = '';
+  let retried = false;
+  let error: string | undefined;
+  const { token: dwToken, source: tokenSource } = getDwToken(placeCode);
+  let usersMapStatus: 'ok' | 'empty' | 'error' = 'ok'; // DW API usersMap状態
+
+  const parseOk = async (r: Response) => {
+    try {
+      const j = await r.json();
+      return Array.isArray(j?.data) ? j.data : (j?.items || []);
+    } catch {
+      error = 'invalid_json';
+      return null;
+    }
+  };
+
   try {
     const t0 = Date.now();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_PATH || "http://localhost:3002";
-    const r = await withTimeout(
-      fetch(`${baseUrl}/api/dandori/sites?place_code=${placeCode}&site_status=${encodeURIComponent(status)}`, { cache: "no-store" }),
-      T_DW,
-      "dw"
-    );
-    timings.dwStatus = (r as Response).status;
-    if ((r as Response).ok) {
-      const j: any = await (r as Response).json();
-      console.log('[quicklist] DW response keys:', Object.keys(j), 'data type:', typeof j?.data, 'is array:', Array.isArray(j?.data));
-      // DW APIは { data: [...] } 形式
-      const all = Array.isArray(j?.data) ? j.data : [];
+
+    const mkDwUrl = (buster?: string) => {
+      const qs = new URLSearchParams({
+        place_code: placeCode,
+        site_status: status,
+      });
+      if (buster) qs.set('_', buster);
+      return `${baseUrl}/api/dandori/sites?${qs.toString()}`;
+    };
+
+    const dwUrl = mkDwUrl();
+    dwUrlTried = dwUrl;
+
+    // 1回目のfetch
+    let resp = dwToken
+      ? await withTimeout(
+          fetch(dwUrl, { cache: "no-store", next: { revalidate: 0 } }),
+          T_DW,
+          "dw"
+        ) as Response
+      : new Response(null, { status: 499 }) as Response;
+
+    dwStatus = resp.status;
+    timings.dwStatus = dwStatus;
+
+    let data = resp.ok ? await parseOk(resp) : null;
+
+    // 404 or 4xx/5xx OR invalid_json の場合は800ms待機して1回だけリトライ
+    if (!resp.ok || data === null) {
+      retried = true;
+      console.warn(`[quicklist] DW ${dwStatus}, retrying after 800ms with cache-buster...`);
+      await sleep(800);
+      const dw2Url = mkDwUrl(Date.now().toString());
+      dwUrlTried = dw2Url;
+
+      const resp2 = await withTimeout(
+        fetch(dw2Url, { cache: "no-store", next: { revalidate: 0 } }),
+        T_DW,
+        "dw-retry"
+      ) as Response;
+
+      dwStatus = resp2.status;
+      timings.dwStatus = dwStatus;
+
+      data = resp2.ok ? await parseOk(resp2) : null;
+
+      if (!resp2.ok || data === null) {
+        console.error('[quicklist] DW retry failed', { status: resp2.status, error });
+        // STG fallback へ進む
+      }
+    }
+
+    // データがあればitemsに格納
+    if (Array.isArray(data) && data.length > 0) {
+      console.log('[quicklist] DW success, data length:', data.length);
+      const all = data;
       if (all.length > 0) {
         console.log('[quicklist] DW first item keys:', Object.keys(all[0]));
         console.log('[quicklist] DW first item sample:', JSON.stringify(all[0], null, 2));
       }
-      // ユーザーIDを収集（manager_idのみ抽出）
-      const userIds = all
-        .map((site: any) => site.manager?.admin)
-        .filter((id: any) => id);
 
-      // UNION ALL + LRUキャッシュでユーザー解決
-      const { byId, byUsername } = await resolveUsersByKeys(userIds);
+      // DW API からユーザーマップ取得（キャッシュ付き）
+      let usersMap: Map<string, { name: string; username?: string }>;
+      try {
+        usersMap = await getDwUsersMap(placeCode, dwToken);
+        if (usersMap.size === 0) usersMapStatus = 'empty';
+      } catch (e) {
+        usersMapStatus = 'error';
+        usersMap = new Map();
+      }
 
       // DW APIのフィールド名を正規化（SiteCardコンポーネント形式に合わせる）
       const normalized = all.map((site: any) => {
-        const managerId = site.manager?.admin || "";
-        const managerName = resolveManager(managerId, byId, byUsername);
+        // 担当者名を usersMap から解決
+        const managerId = String(site.manager?.admin ?? '').trim();
+        const managerName = managerId
+          ? (usersMap.get(managerId)?.name || `ID: #${managerId}`)
+          : '';
 
         // 現場種類の名称マッピング（仮）
         const siteTypeMap: Record<number, string> = {
@@ -109,6 +267,9 @@ export async function GET(req: Request) {
           address = parts.join("");
         }
 
+        // member_keys を user_code ベースで生成（自分の現場判定用）
+        const uniqueMemberKeys = ensureMemberKeysFromSite(site);
+
         return {
           site_code: site.site_code || "",
           site_name: site.name || "(名称未設定)",
@@ -118,7 +279,8 @@ export async function GET(req: Request) {
           address: address || undefined,
           manager_name: managerName,
           manager_id: managerId,
-          place_code: placeCode
+          place_code: placeCode,
+          member_keys: uniqueMemberKeys
         };
       });
       items = filterText(normalized, q).slice(0, per);
@@ -139,11 +301,12 @@ export async function GET(req: Request) {
       const t1 = Date.now();
       const baseUrl = process.env.NEXT_PUBLIC_BASE_PATH || "http://localhost:3002";
       const r = await withTimeout(
-        fetch(`${baseUrl}/api/stg-sites?limit=${per}&status=${encodeURIComponent(status)}&q=${encodeURIComponent(q)}`, { cache: "no-store" }),
+        fetch(`${baseUrl}/api/stg-sites?limit=${per}&status=${encodeURIComponent(status)}&q=${encodeURIComponent(q)}&place=${encodeURIComponent(placeCode)}`, { cache: "no-store" }),
         T_STG,
         "stg"
       );
-      timings.stgStatus = (r as Response).status;
+      stgStatus = (r as Response).status;
+      timings.stgStatus = stgStatus;
       if ((r as Response).ok) {
         const j: any = await (r as Response).json();
         const all = Array.isArray(j?.sites) ? j.sites : [];
@@ -153,111 +316,23 @@ export async function GET(req: Request) {
       timings.stgMs = Date.now() - t1;
     } catch (e: any) {
       timings.stgError = String(e?.message || e);
+      stgStatus = -1;
     }
   }
 
   console.log('[quicklist] RESULT provider:', provider, 'items:', items.length, 'timings:', timings);
   return NextResponse.json({
-    ok: true,
+    ok: provider !== 'none',
     provider,
+    place: placeCode,
     total: items.length,
     items,
+    error,
     timings,
+    debug: { dwStatus, dwUrl: dwUrlTried, retried, stgStatus, tokenSource, usersFrom: 'dw', usersMapStatus },
   }); // ← 必ず200
 }
 
-/**
- * UNION ALL方式でユーザーを解決（チャンク500件）
- * id/login_id/employee_codeの3方向からマッチング
- */
-async function resolveUsersByKeys(userIds: string[]) {
-  const uniqueIds = Array.from(new Set(userIds.map(id => String(id)))).filter(Boolean);
-
-  if (uniqueIds.length === 0) return { byId: new Map(), byLogin: new Map(), byEmp: new Map() };
-
-  // キャッシュヒット確認
-  const uncached: string[] = [];
-  uniqueIds.forEach(id => {
-    if (!userCache.has(id)) {
-      uncached.push(id);
-    } else {
-      cacheHits++;
-    }
-  });
-
-  // 未キャッシュ分をDBから取得
-  if (uncached.length > 0) {
-    let conn;
-    try {
-      conn = await mysql.createConnection({
-        host: 'localhost',
-        port: 13306,
-        user: process.env.DB_USER || 'dandoliworks',
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME || 'dandolijp',
-      });
-
-      // 500件ずつチャンク分割
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < uncached.length; i += CHUNK_SIZE) {
-        const chunk = uncached.slice(i, i + CHUNK_SIZE);
-        const placeholders = chunk.map(() => '?').join(',');
-
-        // UNION ALL で2方向から取得（id, username）
-        const sql = `
-          (SELECT u.id, u.username, CONCAT(p.user_last_name, p.user_first_name) AS name
-           FROM users u LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE u.id IN (${placeholders}))
-          UNION ALL
-          (SELECT u.id, u.username, CONCAT(p.user_last_name, p.user_first_name) AS name
-           FROM users u LEFT JOIN profiles p ON u.id = p.user_id
-           WHERE u.username IN (${placeholders}))
-        `;
-
-        const params = [...chunk, ...chunk];
-        const [rows] = await conn.query<any[]>(sql, params);
-
-        // キャッシュに登録（id, usernameの2方向で登録）
-        rows.forEach((user: any) => {
-          const userObj = {
-            id: String(user.id),
-            username: String(user.username || ''),
-            name: user.name,
-          };
-
-          // 2方向でキャッシュ登録
-          if (user.id) userCache.set(String(user.id), userObj);
-          if (user.username) userCache.set(String(user.username), userObj);
-        });
-
-        dbFetches += chunk.length;
-      }
-    } catch (e) {
-      console.error('[quicklist] Failed to fetch users:', e);
-    } finally {
-      if (conn) await conn.end();
-    }
-  }
-
-  // Map構築
-  const byId = new Map<string, any>();
-  const byUsername = new Map<string, any>();
-
-  uniqueIds.forEach(id => {
-    const user = userCache.get(id);
-    if (user) {
-      if (user.id) byId.set(user.id, user);
-      if (user.username) byUsername.set(user.username, user);
-    }
-  });
-
-  return { byId, byUsername };
-}
-
-/**
- * manager_idからユーザー名を段階的に解決
- * ① id一致 → ② username一致 → ③ フォールバック
- */
 function resolveManager(managerId: string, byId: Map<string, any>, byUsername: Map<string, any>): string | undefined {
   if (!managerId) return undefined;
 
