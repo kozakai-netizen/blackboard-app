@@ -1,11 +1,79 @@
 import { NextResponse } from "next/server";
 import { LRUCache } from 'lru-cache';
 import { getDwToken } from '@/lib/dw/token';
+import mysql from 'mysql2/promise';
 
 const T_DW = 2500; // ms
 const T_STG = 2500;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const DW_BASE = process.env.NEXT_PUBLIC_DW_API_BASE || 'https://api.dandoli.jp/api';
+
+// === helpers: site_id 抽出 & ゼロ詰め ===
+const pad8 = (s: string) => (s || '').padStart(8, '0');
+
+function extractSiteIdFromUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  const m = url.match(/\/sites\/(\d+)\//);
+  return m?.[1];
+}
+
+// === DB: site_id一括取得（sites_crews） ===
+async function fetchCrewMapBySiteIds(siteIds: string[]): Promise<Map<string, Set<string>>> {
+  const map = new Map<string, Set<string>>();
+  if (siteIds.length === 0) return map;
+
+  let conn;
+  try {
+    conn = await mysql.createConnection({
+      host: process.env.DB_HOST || '127.0.0.1',
+      port: Number(process.env.DB_PORT) || 13306,
+      user: process.env.DB_USER || 'dandoliworks',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'dandolijp',
+    });
+
+    // 大量の場合はチャンク
+    const chunkSize = 500;
+    for (let i = 0; i < siteIds.length; i += chunkSize) {
+      const chunk = siteIds.slice(i, i + chunkSize);
+      const [res] = await conn.query(
+        `
+          SELECT CAST(site_id AS CHAR) AS site_id,
+                 CAST(crew_id AS CHAR) AS crew_id,
+                 COALESCE(user_level, 0) AS user_level
+          FROM sites_crews
+          WHERE site_id IN (?)
+            AND deleted = 0
+            AND COALESCE(user_level, 0) IN (1,2,3)
+        `,
+        [chunk]
+      );
+
+      const rows = res as Array<{ site_id: string; crew_id: string; user_level: number }>;
+      for (const r of rows) {
+        if (!map.has(r.site_id)) map.set(r.site_id, new Set());
+        map.get(r.site_id)!.add(r.crew_id);
+      }
+    }
+
+    return map;
+  } catch (e: any) {
+    console.warn(`[quicklist] fetchCrewMapBySiteIds error:`, e.message);
+    return map;
+  } finally {
+    try { await conn?.end(); } catch {}
+  }
+}
+
+// === member_keys を DB の user_id から構築 ===
+function attachMemberKeysFromDB(normalizedSites: any[], crewMap: Map<string, Set<string>>) {
+  for (const site of normalizedSites) {
+    const sid = extractSiteIdFromUrl(site?.url);
+    const ids = sid ? Array.from(crewMap.get(sid) ?? []) : [];
+    const padded = ids.map(pad8);
+    site.member_keys = Array.from(new Set([...ids, ...padded])); // 重複除去
+  }
+}
 
 // DW API ユーザーキャッシュ (place単位)
 const dwUsersCache = new LRUCache<string, Map<string, { name: string; username?: string }>>({
@@ -100,34 +168,6 @@ async function getDwUsersMap(placeCode: string, token?: string): Promise<Map<str
   }
 }
 
-/**
- * 現場データから member_keys を user_code ベースで生成
- */
-function ensureMemberKeysFromSite(raw: any): string[] {
-  const out = new Set<string>();
-  const norm = (v: any) => (v ?? '').toString().trim();
-
-  // manager.*（admin / sub_admin1-3 / chief / leader など想定）
-  const m = raw?.manager || {};
-  [m.admin, m.sub_admin1, m.sub_admin2, m.sub_admin3, m.chief, m.leader]
-    .map(norm).filter(Boolean).forEach(v => out.add(v));
-
-  // casts / workers が配列なら user_code を回収
-  (Array.isArray(raw?.casts) ? raw.casts : []).forEach((x: any) => {
-    const c = norm(x?.cast || x?.user_code);
-    if (c) out.add(c);
-  });
-  (Array.isArray(raw?.workers) ? raw.workers : []).forEach((x: any) => {
-    const c = norm(x?.worker || x?.user_code);
-    if (c) out.add(c);
-  });
-
-  // 既に member_keys が来ていれば union
-  (Array.isArray(raw?.member_keys) ? raw.member_keys : []).map(norm).filter(Boolean).forEach(v => out.add(v));
-
-  return Array.from(out);
-}
-
 export async function GET(req: Request) {
   console.log('[quicklist] START');
   const { searchParams } = new URL(req.url);
@@ -135,7 +175,7 @@ export async function GET(req: Request) {
   const statusKey = searchParams.get("status") || "progress";
   const status = toStatusList(statusKey); // "progress" → "1,2,3"
   const per = Math.min(80, Number(searchParams.get("per") || "50"));
-  const placeCode = (searchParams.get("place") || "").trim() || process.env.NEXT_PUBLIC_PLACE_CODE || "dandoli-sample1"; // ★必須
+  const placeCode = (searchParams.get("place") || "").trim() || process.env.NEXT_PUBLIC_PLACE_CODE || "dandoli-sample1";
   console.log('[quicklist] q:', q, 'statusKey:', statusKey, 'status:', status, 'per:', per, 'place:', placeCode);
 
   const timings: any = {};
@@ -219,20 +259,29 @@ export async function GET(req: Request) {
     if (Array.isArray(data) && data.length > 0) {
       console.log('[quicklist] DW success, data length:', data.length);
       const all = data;
-      if (all.length > 0) {
-        console.log('[quicklist] DW first item keys:', Object.keys(all[0]));
-        console.log('[quicklist] DW first item sample:', JSON.stringify(all[0], null, 2));
-      }
 
       // DW API からユーザーマップ取得（キャッシュ付き）
       let usersMap: Map<string, { name: string; username?: string }>;
       try {
         usersMap = await getDwUsersMap(placeCode, dwToken);
         if (usersMap.size === 0) usersMapStatus = 'empty';
-      } catch (e) {
+      } catch {
         usersMapStatus = 'error';
         usersMap = new Map();
       }
+
+      // すべてのsite_idを集める
+      const siteIdSet = new Set<string>();
+      for (const site of all) {
+        const sid = extractSiteIdFromUrl(site?.url);
+        if (sid) siteIdSet.add(sid);
+      }
+      const siteIds = Array.from(siteIdSet);
+      console.log(`[quicklist] Extracted ${siteIds.length} unique site_ids from ${all.length} sites`);
+
+      // DBから一括取得
+      const crewMap = await fetchCrewMapBySiteIds(siteIds);
+      console.log(`[quicklist] fetchCrewMapBySiteIds returned ${crewMap.size} sites with crews`);
 
       // DW APIのフィールド名を正規化（SiteCardコンポーネント形式に合わせる）
       const normalized = all.map((site: any) => {
@@ -258,9 +307,6 @@ export async function GET(req: Request) {
           address = parts.join("");
         }
 
-        // member_keys を user_code ベースで生成（自分の現場判定用）
-        const uniqueMemberKeys = ensureMemberKeysFromSite(site);
-
         return {
           site_code: site.site_code || "",
           site_name: site.name || "(名称未設定)",
@@ -271,15 +317,25 @@ export async function GET(req: Request) {
           manager_name: managerName,
           manager_id: managerId,
           place_code: placeCode,
-          member_keys: uniqueMemberKeys
+          url: site.url // site_id 抽出用にurlを保持
         };
       });
+
+      // member_keys を DB 結果から付与
+      attachMemberKeysFromDB(normalized, crewMap);
+
       items = filterText(normalized, q).slice(0, per);
       provider = "dandori";
+
       console.log('[quicklist] DW items after filter:', items.length);
-      if (items.length > 0) {
-        console.log('[quicklist] Normalized first item:', JSON.stringify(items[0], null, 2));
-      }
+
+      // デバッグ情報
+      const siteIdsQueried = siteIds.slice(0, 20);
+      timings.siteCrewsLookup = {
+        source: 'db-sites_crews',
+        siteIdsQueried,
+        crewMapSites: crewMap.size,
+      };
     }
     timings.dwMs = Date.now() - t0;
   } catch (e: any) {
@@ -320,7 +376,16 @@ export async function GET(req: Request) {
     items,
     error,
     timings,
-    debug: { dwStatus, dwUrl: dwUrlTried, retried, stgStatus, tokenSource, usersFrom: 'dw', usersMapStatus },
+    debug: {
+      dwStatus,
+      dwUrl: dwUrlTried,
+      retried,
+      stgStatus,
+      tokenSource,
+      usersFrom: 'dw',
+      usersMapStatus,
+      siteCrewsLookup: timings.siteCrewsLookup || { source: 'n/a', siteIdsQueried: [], crewMapSites: 0 }
+    },
   }); // ← 必ず200
 }
 

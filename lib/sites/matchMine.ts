@@ -44,6 +44,11 @@ export function includesUserLoose(site: any, keys: Set<string>): boolean {
   // STG側の別名
   cands.push(site.admin_id, site.owner_id);
 
+  // quicklist APIで生成された member_keys 配列（最優先）
+  if (Array.isArray(site.member_keys)) {
+    cands.push(...site.member_keys);
+  }
+
   return cands
     .filter(v => v !== null && v !== undefined)
     .some(v => keys.has(String(v)));
