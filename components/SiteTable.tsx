@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { fileStore } from '@/lib/fileStore';
 import { SiteChip } from '@/components/ui/SiteChip';
 import { statusVariant, typeVariant } from '@/lib/sites/chipStyle';
+import { tone } from '@/lib/ui/theme';
 
 interface Site {
   site_code: string;
@@ -15,6 +16,7 @@ interface Site {
   updated_at?: string;
   manager_name?: string;
   status?: string;
+  place_code?: string;
 }
 
 interface SiteTableProps {
@@ -65,6 +67,17 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
       setSortKey(key);
       setSortOrder('asc');
     }
+  };
+
+  const handleUpload = (e: React.MouseEvent, site: Site) => {
+    e.stopPropagation();
+    router.push(`/sites/${site.site_code}?tab=upload`);
+  };
+
+  const handleDandori = (e: React.MouseEvent, site: Site) => {
+    e.stopPropagation();
+    const url = `https://d.dandori.work/${site.place_code || placeCode}/${site.site_code}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   // 行クリック→ファイル選択ダイアログを開く
@@ -160,6 +173,9 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                     更新日 <SortIcon columnKey="updated_at" />
                   </div>
                 </th>
+                <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 uppercase tracking-wider">
+                  アクション
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -210,6 +226,24 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                     {site.updated_at
                       ? new Date(site.updated_at).toLocaleDateString('ja-JP')
                       : '-'}
+                  </td>
+                  <td className="px-6 py-5">
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={(e) => handleUpload(e, site)}
+                        data-testid="btn-local"
+                        className={tone.buttonSecondary}
+                      >
+                        ローカルから
+                      </button>
+                      <button
+                        onClick={(e) => handleDandori(e, site)}
+                        data-testid="btn-stg"
+                        className={tone.buttonPrimary}
+                      >
+                        DWから
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
