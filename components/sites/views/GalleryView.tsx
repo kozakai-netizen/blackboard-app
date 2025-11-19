@@ -136,19 +136,19 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
               </p>
             )}
 
-            {/* CTAボタン */}
-            <div className="mt-3 flex gap-3">
+            {/* CTAボタン - 右下配置 */}
+            <div className="mt-3 flex gap-2 justify-end">
               <button
                 onClick={(e) => handleUpload(e, site.site_code)}
                 data-testid="btn-local"
-                className={tone.link}
+                className={tone.buttonSecondary}
               >
                 ローカルから
               </button>
               <button
                 onClick={(e) => handleDandori(e, site)}
                 data-testid="btn-stg"
-                className={tone.link}
+                className={tone.buttonPrimary}
               >
                 DWから
               </button>
