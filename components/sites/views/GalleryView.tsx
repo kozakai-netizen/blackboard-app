@@ -120,7 +120,7 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
             {site.address && (
               <p
                 data-testid="site-address"
-                className="text-xs text-gray-600 mt-2 line-clamp-1"
+                className="text-sm text-gray-600 mt-2 line-clamp-1"
               >
                 {site.address}
               </p>
@@ -130,7 +130,7 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
             {site.updated_at && (
               <p
                 data-testid="site-updated-at"
-                className="text-xs text-gray-500 mt-1"
+                className="text-sm text-gray-500 mt-1"
               >
                 更新: {new Date(site.updated_at).toLocaleDateString('ja-JP')}
               </p>
