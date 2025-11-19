@@ -1,3 +1,12 @@
+/**
+ * 現場一覧画面
+ *
+ * - 開発モード（DEV MODE）: ?role=prime/sub でログインスキップ
+ * - 協力業者の二重フィルタ回避: isSubUser判定でincludesUserLooseをスキップ
+ * - 元請けのみ「自分の現場のみ」トグル表示
+ *
+ * 詳細仕様: docs/dw-integration-spec.md を参照
+ */
 "use client";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -18,27 +27,39 @@ function useQueryBool(key: string, defaultVal: boolean) {
   const pathname = usePathname();
   const sp = useSearchParams();
 
-  const initial = (() => {
-    const v = sp.get(key);
-    if (v === '1' || v === 'true') return true;
-    if (v === '0' || v === 'false') return false;
-    if (typeof window !== 'undefined') {
-      const ls = localStorage.getItem(`sites.${key}`);
-      if (ls === '1' || ls === 'true') return true;
-      if (ls === '0' || ls === 'false') return false;
-    }
-    return defaultVal;
-  })();
+  // SSR対応: initialをstateの初期値ではなく、useEffect内で設定
+  const [val, setVal] = useState<boolean>(defaultVal);
+  const [initialized, setInitialized] = useState(false);
 
-  const [val, setVal] = useState<boolean>(initial);
-
+  // クライアントサイドで初期値を設定
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (initialized) return;
+
+    const v = sp.get(key);
+    if (v === '1' || v === 'true') {
+      setVal(true);
+    } else if (v === '0' || v === 'false') {
+      setVal(false);
+    } else if (typeof window !== 'undefined') {
+      const ls = localStorage.getItem(`sites.${key}`);
+      if (ls === '1' || ls === 'true') {
+        setVal(true);
+      } else if (ls === '0' || ls === 'false') {
+        setVal(false);
+      }
+    }
+    setInitialized(true);
+  }, [sp, key, initialized]);
+
+  // URL & localStorage同期
+  useEffect(() => {
+    if (!initialized || typeof window === 'undefined') return;
+
     localStorage.setItem(`sites.${key}`, val ? '1' : '0');
     const u = new URL(window.location.href);
     u.searchParams.set(key, val ? '1' : '0');
     router.replace(`${pathname}?${u.searchParams.toString()}`, { scroll: false });
-  }, [val, key, router, pathname]);
+  }, [val, key, router, pathname, initialized]);
 
   return [val, setVal] as const;
 }
@@ -58,6 +79,10 @@ export default function SitesSearchPage() {
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // セッション情報（ログイン状態）
+  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+
   // ユーザーキー情報を取得
   const [userKeys, setUserKeys] = useState<UserKeys | null>(null);
 
@@ -72,9 +97,10 @@ export default function SitesSearchPage() {
   const [selectedManager, setSelectedManager] = useState("");
   const [selectedRoleManager, setSelectedRoleManager] = useState("");
 
-  const uid = typeof window !== "undefined"
+  // セッションからuserIdを取得（優先）、なければデフォルト値
+  const uid = sessionUser?.userId || (typeof window !== "undefined"
     ? Number(sessionStorage.getItem("userId") ?? process.env.NEXT_PUBLIC_DEFAULT_USER_ID ?? 40824)
-    : 40824;
+    : 40824);
 
   const placeCode = typeof window !== "undefined"
     ? process.env.NEXT_PUBLIC_PLACE_CODE || "dandoli-sample1"
@@ -84,20 +110,99 @@ export default function SitesSearchPage() {
   const quick = search?.get("quick") === "1";
   const debug = search?.get("debug") === "1";
 
+  // 🔧 開発環境専用: ?role=prime or ?role=sub でユーザー切り替え
+  const devRole = search?.get("role"); // "prime" or "sub"
+  const isDev = process.env.NODE_ENV === 'development';
+
+  // セッション情報を取得
+  useEffect(() => {
+    (async () => {
+      try {
+        // 🔧 開発モードで ?role が指定されている場合、固定ユーザーをセット
+        if (isDev && devRole && (devRole === 'prime' || devRole === 'sub')) {
+          const debugUserId = devRole === 'prime'
+            ? Number(process.env.NEXT_PUBLIC_DEBUG_FIXED_USER_ID_PRIME || 40824)
+            : Number(process.env.NEXT_PUBLIC_DEBUG_FIXED_USER_ID_SUB || 40364);
+          const debugPlaceId = Number(process.env.NEXT_PUBLIC_DEBUG_FIXED_PLACE_ID || 170);
+
+          console.log(`🔧 [DEV MODE] ログインスキップ: role=${devRole}, userId=${debugUserId}, placeId=${debugPlaceId}`);
+
+          const user = {
+            userId: debugUserId,
+            placeId: debugPlaceId,
+            userRole: devRole,
+            isDebugMode: true
+          };
+
+          console.log(`📊 [Session User Set]`, user);
+          setSessionUser(user);
+          setSessionLoading(false);
+          return;
+        }
+
+        const res = await fetch('/api/auth/session', { cache: 'no-store' });
+        const data = await res.json();
+
+        if (data.ok && data.isLoggedIn) {
+          setSessionUser(data.user);
+          console.log('[sites] セッション取得成功:', data.user);
+        } else {
+          console.log('[sites] 未ログイン状態');
+          // 🔧 開発モードではログイン画面にリダイレクトしない
+          if (!isDev || !devRole) {
+            router.push('/login');
+          }
+        }
+      } catch (error) {
+        console.error('[sites] セッション取得エラー:', error);
+      } finally {
+        setSessionLoading(false);
+      }
+    })();
+  }, [router, isDev, devRole]);
+
   // 検索実行（デバウンス）
   useEffect(() => {
+    if (sessionLoading) return; // セッション読み込み中はスキップ
+
+    // 🔍 デバッグログ: API呼び出し前の状態確認
+    console.log('[sites] API呼び出し前の状態:', {
+      sessionLoading,
+      sessionUser,
+      uid,
+      placeCode,
+      onlyMine,
+      devRole
+    });
+
     setState("loading");
     setErrMsg("");
 
     const t = setTimeout(async () => {
       try {
-        // 常にquicklist APIを使用（高速・安定）
-        // ステータスは "progress" (1,2,3) で全件取得し、クライアント側でフィルター
-        const url = `/api/sites/quicklist?q=${encodeURIComponent(q)}&status=progress&per=100`;
+        // quicklist APIを使用（userRole判定 + ステータス配列対応）
+        // デフォルトは status未指定 → [1,2,3] が適用される
+        const url = `/api/sites/quicklist?q=${encodeURIComponent(q)}&per=100&user_id=${uid}&place=${encodeURIComponent(placeCode)}&only=${onlyMine ? 1 : 0}`;
+        console.log('[sites] API URL:', url);
         const r = await fetch(url, {
           cache: "no-store"
         });
         const j = await r.json();
+        console.log('[sites] API レスポンス:', {
+          ok: j.ok,
+          userRole: j.userRole,
+          itemsLength: j.items?.length,
+          total: j.total
+        });
+
+        // userRole が unknown の場合はエラー状態として扱う
+        if (j?.userRole === 'unknown') {
+          setState("error");
+          setErrMsg(j?.message || "ユーザーロールの判定に失敗しました。データベース接続を確認してください。");
+          setRes(j);
+          return;
+        }
+
         setRes(j);
 
         if (!Array.isArray(j?.items)) {
@@ -114,14 +219,14 @@ export default function SitesSearchPage() {
       } catch (e: any) {
         setState("error");
         setErrMsg(e?.message || "通信エラー");
-        setRes({ ok: false, provider: "error", items: [], total: 0, timings: {} });
+        setRes({ ok: false, provider: "error", items: [], total: 0, timings: {}, userRole: 'unknown' });
       }
     }, 300);
 
     return () => {
       clearTimeout(t);
     };
-  }, [q, status, page, onlyMine, uid, quick]); // status, onlyMine を依存配列に追加
+  }, [q, status, page, onlyMine, uid, placeCode, quick, sessionLoading]);
 
   // / キーでフォーカス
   useEffect(() => {
@@ -191,22 +296,26 @@ export default function SitesSearchPage() {
   // keySetを構築（useMemoで最適化）
   const keySet = useMemo(() => buildKeySet(userKeys), [userKeys]);
 
+  // 協力業者判定
+  const isSubUser = sessionUser?.userRole === 'sub';
+
   // フィルター処理（useMemoで最適化）
   const filteredItems = useMemo(() => {
     const raw: any[] = Array.isArray(res?.items) ? res.items : [];
 
-    return raw.filter((site: any) => {
+    const filtered = raw.filter((site: any) => {
       if (debug) {
         console.log('[Filter] Checking site:', {
           site_name: site.site_name,
           status: site.status,
           manager_id: site.manager_id,
-          filters: { onlyMine, statusFilter: status, selectedStatus }
+          filters: { onlyMine, statusFilter: status, selectedStatus, isSubUser }
         });
       }
 
-      // onlyMineフィルター（新しいkeySet照合）
-      if (onlyMine) {
+      // 協力業者の場合：API がすでに「自分の現場のみ」に絞っているので
+      // includesUserLoose での再フィルタリングは行わない
+      if (!isSubUser && onlyMine) {
         if (keySet.size === 0) {
           if (debug) console.log('[Filter] ❌ No user keys loaded');
           return false;
@@ -272,7 +381,14 @@ export default function SitesSearchPage() {
       if (debug) console.log('[Filter] ✅ Passed all filters');
       return true;
     });
-  }, [res?.items, onlyMine, keySet, searchQuery, selectedSiteType, status, selectedStatus, selectedManager, selectedRoleManager, createdFrom, createdTo, updatedFrom, updatedTo, debug]);
+
+    // 協力業者モードのデバッグログ
+    if (isSubUser) {
+      console.log('[sites] SUB FILTER', 'raw:', raw.length, 'after:', filtered.length);
+    }
+
+    return filtered;
+  }, [res?.items, onlyMine, keySet, searchQuery, selectedSiteType, status, selectedStatus, selectedManager, selectedRoleManager, createdFrom, createdTo, updatedFrom, updatedTo, debug, isSubUser, sessionUser]);
 
   // デバッグ情報
   if (debug) {
@@ -323,11 +439,8 @@ export default function SitesSearchPage() {
           setPage(1);
           setQ(value);
         }}
-        onOpenAdvSearch={() => setShowAdvancedSearch(!showAdvancedSearch)}
-        companyLogo={companyLogo}
-        showMenu={showMenu}
-        onToggleMenu={setShowMenu}
-        onLogoClick={() => fileInputRef.current?.click()}
+        showOnlyMineToggle={res?.userRole === 'prime'} // 元請けのみトグル表示
+        sessionUser={sessionUser}
       />
 
       <div className="mx-auto max-w-6xl px-3 sm:px-4 py-4 space-y-4">
