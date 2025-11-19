@@ -142,57 +142,59 @@ export function KanbanView({ sites, placeCode }: KanbanViewProps) {
                 <div
                   key={site.site_code}
                   onClick={() => handleCardClick(site.site_code)}
-                  className={`${tone.surface} ${tone.cardPad} cursor-pointer`}
+                  className={`${tone.surface} ${tone.cardPad} cursor-pointer flex flex-col`}
                 >
-                  {/* 現場名 */}
-                  <h4
-                    data-testid="site-name"
-                    className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2 leading-tight"
-                  >
-                    {site.site_name}
-                  </h4>
+                  <div className="flex-1">
+                    {/* 現場名 */}
+                    <h4
+                      data-testid="site-name"
+                      className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2 leading-tight"
+                    >
+                      {site.site_name}
+                    </h4>
 
-                  {/* チップ（種類とステータス） */}
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {site.site_type && <SiteChip text={site.site_type} variant={typeVariant(site.site_type)} testId="site-type" />}
-                    {site.status && <SiteChip text={site.status} variant={statusVariant(site.status)} testId="site-status" />}
+                    {/* チップ（種類とステータス） */}
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {site.site_type && <SiteChip text={site.site_type} variant={typeVariant(site.site_type)} testId="site-type" />}
+                      {site.status && <SiteChip text={site.status} variant={statusVariant(site.status)} testId="site-status" />}
+                    </div>
+
+                    {/* 住所 */}
+                    {site.address && (
+                      <p
+                        data-testid="site-address"
+                        className="text-xs text-gray-600 mt-2 line-clamp-1"
+                      >
+                        {site.address}
+                      </p>
+                    )}
+
+                    {/* 更新日 */}
+                    {site.updated_at && (
+                      <p
+                        data-testid="site-updated-at"
+                        className="text-xs text-gray-500 mt-1"
+                      >
+                        更新: {new Date(site.updated_at).toLocaleDateString('ja-JP')}
+                      </p>
+                    )}
                   </div>
 
-                  {/* 住所 */}
-                  {site.address && (
-                    <p
-                      data-testid="site-address"
-                      className="text-xs text-gray-600 mt-2 line-clamp-1"
-                    >
-                      {site.address}
-                    </p>
-                  )}
-
-                  {/* 更新日 */}
-                  {site.updated_at && (
-                    <p
-                      data-testid="site-updated-at"
-                      className="text-xs text-gray-500 mt-1"
-                    >
-                      更新: {new Date(site.updated_at).toLocaleDateString('ja-JP')}
-                    </p>
-                  )}
-
                   {/* CTAボタン - 右下配置 */}
-                  <div className="mt-3 flex gap-2 justify-end">
+                  <div className="mt-auto pt-3 flex gap-2 justify-end">
                     <button
                       onClick={(e) => handleUpload(e, site.site_code)}
                       data-testid="btn-local"
                       className={tone.buttonSecondary}
                     >
-                      ローカルから
+                      ローカル
                     </button>
                     <button
                       onClick={(e) => handleDandori(e, site)}
                       data-testid="btn-stg"
                       className={tone.buttonPrimary}
                     >
-                      DWから
+                      DW
                     </button>
                   </div>
                 </div>
