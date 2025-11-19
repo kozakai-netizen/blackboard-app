@@ -5,6 +5,18 @@ import type { Manifest } from '@/types';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+console.log('🔧 Supabase initialization:', {
+  url: supabaseUrl,
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  keyPrefix: supabaseAnonKey?.substring(0, 20) + '...',
+});
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Missing Supabase environment variables!');
+  throw new Error('Supabase URL or Anon Key is missing');
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export function getServerSupabase() {

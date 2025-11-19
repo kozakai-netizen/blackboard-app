@@ -441,6 +441,8 @@ export default function SitesSearchPage() {
         }}
         showOnlyMineToggle={res?.userRole === 'prime'} // 元請けのみトグル表示
         sessionUser={sessionUser}
+        showAdvancedSearch={showAdvancedSearch}
+        setShowAdvancedSearch={setShowAdvancedSearch}
       />
 
       <div className="mx-auto max-w-6xl px-3 sm:px-4 py-4 space-y-4">
@@ -466,17 +468,17 @@ export default function SitesSearchPage() {
           </div>
         )}
 
-        {/* 詳細検索モーダル */}
+        {/* 詳細検索ドロワー */}
         {showAdvancedSearch && (
           <>
-            {/* 背景オーバーレイ */}
+            {/* 背景オーバーレイ（透明・クリック可能領域のみ） */}
             <div
-              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+              className="fixed inset-0 z-40"
               onClick={() => setShowAdvancedSearch(false)}
             />
 
-            {/* モーダル本体 */}
-            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl max-h-[80vh] bg-white shadow-2xl z-50 overflow-y-auto rounded-xl">
+            {/* ドロワー本体（右からスライド） */}
+            <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto">
               <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between border-b pb-3">
                   <h2 className="text-xl font-bold text-gray-900">詳細検索</h2>
@@ -486,6 +488,39 @@ export default function SitesSearchPage() {
                   >
                     ×
                   </button>
+                </div>
+
+                {/* ビュー切り替え */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    表示形式
+                  </label>
+                  <div className="inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-white p-1 w-full" data-testid="view-mode-switcher">
+                    <button
+                      onClick={() => setViewMode('gallery')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'gallery' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      ギャラリー
+                    </button>
+                    <button
+                      onClick={() => setViewMode('kanban')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'kanban' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      カンバン
+                    </button>
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'grid' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      カード
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'list' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      リスト
+                    </button>
+                  </div>
                 </div>
 
                 {/* 自分の現場のみ */}

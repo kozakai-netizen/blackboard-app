@@ -6,18 +6,35 @@ import type { Template } from '@/types';
  * 全テンプレートを取得（使用頻度順）
  */
 export async function getAllTemplates(): Promise<Template[]> {
+  console.log('🔍 getAllTemplates() called');
+
   const { data, error } = await supabase
     .from('templates')
     .select('*')
     .order('usage_count', { ascending: false })
     .order('created_at', { ascending: false });
 
+  console.log('📊 Supabase response (templates):', { data, error });
+
   if (error) {
-    console.error('❌ Failed to fetch templates:', error);
+    console.error('❌ Supabase error in getAllTemplates:', error);
     throw error;
   }
 
-  return data.map(transformTemplate);
+  if (!data || data.length === 0) {
+    console.warn('⚠️ No templates found in database');
+    return [];
+  }
+
+  console.log('🛠 transformTemplate input (first item):', data[0]);
+  console.log('🛠 Raw design_settings type:', typeof data[0]?.design_settings);
+  console.log('🛠 Raw design_settings value:', data[0]?.design_settings);
+
+  const transformed = data.map(transformTemplate);
+  console.log('✅ Transformed templates count:', transformed.length);
+  console.log('✅ First transformed template:', transformed[0]);
+
+  return transformed;
 }
 
 /**
@@ -184,28 +201,43 @@ export async function incrementTemplateUsage(id: string): Promise<void> {
  * Supabaseのデータ形式をアプリの型に変換
  */
 function transformTemplate(data: any): Template {
-  return {
+  console.log('🔧 transformTemplate input:', {
     id: data.id,
     name: data.name,
-    description: data.description || '',
-    fields: data.fields || [],
-    defaultValues: data.default_values || {},
-    designSettings: data.design_settings || {
-      style: 'black',
-      position: { x: 10, y: 50 },
-      width: 80,
-      height: 20,
-      fontSize: 'standard',
-      bgColor: '#000000',
-      textColor: '#FFFFFF',
-      opacity: 85,
-    },
-    isDefault: data.is_default || false,
-    usageCount: data.usage_count || 0,
-    lastUsed: data.last_used,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
-  };
+    design_settings_type: typeof data.design_settings,
+    design_settings: data.design_settings,
+  });
+
+  try {
+    const transformed = {
+      id: data.id,
+      name: data.name,
+      description: data.description || '',
+      fields: data.fields || [],
+      defaultValues: data.default_values || {},
+      designSettings: data.design_settings || {
+        style: 'black',
+        position: { x: 10, y: 50 },
+        width: 80,
+        height: 20,
+        fontSize: 'standard',
+        bgColor: '#000000',
+        textColor: '#FFFFFF',
+        opacity: 85,
+      },
+      isDefault: data.is_default || false,
+      usageCount: data.usage_count || 0,
+      lastUsed: data.last_used,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+
+    console.log('✅ transformTemplate output:', transformed);
+    return transformed;
+  } catch (e) {
+    console.error('❌ Error in transformTemplate:', e);
+    throw e;
+  }
 }
 
 /**

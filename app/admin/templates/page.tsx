@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { getAllTemplates, deleteTemplate, duplicateTemplate } from '@/lib/templates'
 import type { Template } from '@/types'
 import { isLegacyDesign } from '@/types/type-guards'
@@ -12,6 +13,7 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [companyLogo, setCompanyLogo] = useState<string | null>(null)
+  const [showNavDrawer, setShowNavDrawer] = useState(false)
 
   useEffect(() => {
     loadTemplates()
@@ -21,16 +23,40 @@ export default function TemplatesPage() {
     }
   }, [])
 
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('ログアウトエラー:', error)
+    }
+  }
+
   const loadTemplates = async () => {
     try {
+      console.log('🎬 loadTemplates started')
       setLoading(true)
       const data = await getAllTemplates()
+      console.log('✅ getAllTemplates returned:', data)
       setTemplates(data)
+      console.log('✅ Templates set in state')
     } catch (error) {
       console.error('❌ Failed to load templates:', error)
-      alert('テンプレートの読み込みに失敗しました')
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error
+      })
+
+      // Supabase接続エラーの場合は空配列をセット（一時的な回避策）
+      console.warn('⚠️ Supabase接続エラーのため、空のテンプレートリストを表示します')
+      console.warn('⚠️ Supabaseダッシュボードでプロジェクトの状態とURLを確認してください')
+      setTemplates([])
+
+      alert('テンプレートの読み込みに失敗しました\n\nSupabase接続エラー: プロジェクトが存在しないか、URLが間違っている可能性があります。\n\nSupabaseダッシュボードで確認してください。')
     } finally {
       setLoading(false)
+      console.log('🏁 loadTemplates finished')
     }
   }
 
@@ -75,15 +101,72 @@ export default function TemplatesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* ナビゲーションドロワー */}
+      {showNavDrawer && (
+        <>
+          {/* 背景オーバーレイ */}
+          <div
+            className="fixed inset-0 z-50"
+            onClick={() => setShowNavDrawer(false)}
+          />
+
+          {/* ドロワー本体 */}
+          <div className="fixed left-0 top-0 bottom-0 w-64 bg-white shadow-2xl z-50 transform transition-transform">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h2 className="text-xl font-bold text-gray-900">メニュー</h2>
+                <button
+                  onClick={() => setShowNavDrawer(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* メニューリンク */}
+              <nav className="space-y-2">
+                <Link
+                  href="/sites"
+                  className="block px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
+                  onClick={() => setShowNavDrawer(false)}
+                >
+                  現場一覧
+                </Link>
+                <Link
+                  href="/admin/templates"
+                  className="block px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
+                  onClick={() => setShowNavDrawer(false)}
+                >
+                  黒板テンプレート設定
+                </Link>
+                <Link
+                  href="/admin"
+                  className="block px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
+                  onClick={() => setShowNavDrawer(false)}
+                >
+                  管理画面
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
+                >
+                  ログアウト
+                </button>
+              </nav>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ヘッダー - 現場一覧と統一 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
             {companyLogo && (
               <button
-                onClick={() => window.location.href = '/sites'}
+                onClick={() => setShowNavDrawer(true)}
                 className="flex-shrink-0 hover:opacity-80 transition-opacity"
-                title="現場一覧に戻る"
+                title="メニューを開く"
               >
                 <img
                   src={companyLogo}
@@ -93,7 +176,7 @@ export default function TemplatesPage() {
               </button>
             )}
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">📝 テンプレート管理</h1>
+              <h1 className="text-2xl font-bold text-gray-900">テンプレート管理</h1>
               <p className="mt-1 text-sm text-gray-600">
                 黒板テンプレートの作成・編集・削除ができます
               </p>
