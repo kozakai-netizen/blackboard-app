@@ -43,6 +43,17 @@ export function SiteCard({ site, placeCode, onCardClick }: SiteCardProps) {
     }
   }
 
+  const handleUpload = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    router.push(`/sites/${site.site_code}?tab=upload`)
+  }
+
+  const handleDandori = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const url = `https://d.dandori.work/${site.place_code}/${site.site_code}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []).slice(0, 50)
     if (files.length > 0) {
@@ -131,6 +142,24 @@ export function SiteCard({ site, placeCode, onCardClick }: SiteCardProps) {
             更新: {new Date(site.updated_at).toLocaleDateString('ja-JP')}
           </p>
         )}
+
+        {/* CTAボタン - 右下配置 */}
+        <div className="mt-3 flex gap-2 justify-end">
+          <button
+            onClick={handleUpload}
+            data-testid="btn-local"
+            className={tone.buttonSecondary}
+          >
+            ローカルから
+          </button>
+          <button
+            onClick={handleDandori}
+            data-testid="btn-stg"
+            className={tone.buttonPrimary}
+          >
+            DWから
+          </button>
+        </div>
       </div>
     </>
   )
