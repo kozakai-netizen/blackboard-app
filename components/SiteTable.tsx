@@ -234,14 +234,14 @@ export function SiteTable({ sites, placeCode }: SiteTableProps) {
                         data-testid="btn-local"
                         className={tone.buttonSecondary}
                       >
-                        ローカルから
+                        ローカル
                       </button>
                       <button
                         onClick={(e) => handleDandori(e, site)}
                         data-testid="btn-stg"
                         className={tone.buttonPrimary}
                       >
-                        DWから
+                        DW
                       </button>
                     </div>
                   </td>
