@@ -178,19 +178,19 @@ export function KanbanView({ sites, placeCode }: KanbanViewProps) {
                     </p>
                   )}
 
-                  {/* CTAs */}
-                  <div className="flex gap-2 mt-3 pt-2 border-t border-gray-100">
+                  {/* CTAボタン - 右下配置 */}
+                  <div className="mt-3 flex gap-2 justify-end">
                     <button
                       onClick={(e) => handleUpload(e, site.site_code)}
                       data-testid="btn-local"
-                      className={tone.link}
+                      className={tone.buttonSecondary}
                     >
                       ローカルから
                     </button>
                     <button
                       onClick={(e) => handleDandori(e, site)}
                       data-testid="btn-stg"
-                      className={tone.link}
+                      className={tone.buttonPrimary}
                     >
                       DWから
                     </button>
