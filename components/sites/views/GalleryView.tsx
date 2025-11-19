@@ -87,7 +87,7 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
         <div
           key={site.site_code}
           onClick={() => handleCardClick(site.site_code)}
-          className={`${tone.surface} ${cardSize.maxW} group relative cursor-pointer overflow-hidden border-t-4 ${getStatusBorderColor(site.status)}`}
+          className={`${tone.surface} ${cardSize.maxW} group relative cursor-pointer overflow-hidden border-t-4 ${getStatusBorderColor(site.status)} flex flex-col`}
         >
           {/* Hero Image Container - 3:2 aspect ratio */}
           <div className={`relative w-full ${cardSize.gallery.aspect}`}>
@@ -101,7 +101,7 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
           </div>
 
           {/* Card Content */}
-          <div className={tone.cardPad}>
+          <div className={`${tone.cardPad} flex flex-col flex-1`}>
             {/* 現場名 */}
             <h3
               data-testid="site-name"
@@ -137,20 +137,20 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
             )}
 
             {/* CTAボタン - 右下配置 */}
-            <div className="mt-3 flex gap-2 justify-end">
+            <div className="mt-auto pt-3 flex gap-2 justify-end">
               <button
                 onClick={(e) => handleUpload(e, site.site_code)}
                 data-testid="btn-local"
                 className={tone.buttonSecondary}
               >
-                ローカルから
+                ローカル
               </button>
               <button
                 onClick={(e) => handleDandori(e, site)}
                 data-testid="btn-stg"
                 className={tone.buttonPrimary}
               >
-                DWから
+                DW
               </button>
             </div>
           </div>
