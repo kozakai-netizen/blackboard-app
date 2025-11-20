@@ -100,31 +100,42 @@ export default function Toolbar({
 
       {/* ヘッダー */}
       <div className="bg-white border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {companyLogo && (
-                <button
-                  onClick={() => setShowNavDrawer(true)}
-                  className="flex-shrink-0 hover:opacity-80 transition-opacity"
-                  title="メニューを開く"
-                >
-                  <img
-                    src={companyLogo}
-                    alt="Company Logo"
-                    className="h-16 w-16 object-contain"
-                  />
-                </button>
-              )}
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">現場一覧</h1>
-                <p className="mt-1 text-sm text-gray-600">
-                  現場を選択して電子小黒板を設定します
-                </p>
+        <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-6">
+          <div className="flex items-start justify-between">
+            {/* 左側：ロゴ + タイトル + サブテキスト + 詳細検索ボタン */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-4">
+                {companyLogo && (
+                  <button
+                    onClick={() => setShowNavDrawer(true)}
+                    className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                    title="メニューを開く"
+                  >
+                    <img
+                      src={companyLogo}
+                      alt="Company Logo"
+                      className="h-16 w-16 object-contain"
+                    />
+                  </button>
+                )}
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">現場一覧</h1>
+                  <p className="mt-1 text-sm text-gray-600">
+                    現場を選択して電子小黒板を設定します
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium w-fit"
+                data-testid="btn-adv-search"
+                onClick={()=> setShowAdvancedSearch?.(true)}
+              >
+                詳細検索
+              </button>
             </div>
 
-            {/* User Info Badge (右上吹き出し) */}
+            {/* 右側：元請けバッジ */}
             {sessionUser && (
               <div className="relative group">
                 <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors">
@@ -158,22 +169,6 @@ export default function Toolbar({
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* コントロールバー */}
-      <div className="bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              data-testid="btn-adv-search"
-              onClick={()=> setShowAdvancedSearch?.(true)}
-            >
-              詳細検索
-            </button>
           </div>
         </div>
       </div>

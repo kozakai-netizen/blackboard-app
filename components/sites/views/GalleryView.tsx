@@ -87,7 +87,7 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
         <div
           key={site.site_code}
           onClick={() => handleCardClick(site.site_code)}
-          className={`${tone.surface} ${cardSize.maxW} group relative cursor-pointer overflow-hidden border-t-4 ${getStatusBorderColor(site.status)} flex flex-col`}
+          className={`${tone.surface} group relative cursor-pointer overflow-hidden border-t-4 ${getStatusBorderColor(site.status)} flex flex-col`}
         >
           {/* Hero Image Container - 3:2 aspect ratio */}
           <div className={`relative w-full ${cardSize.gallery.aspect}`}>
@@ -96,7 +96,7 @@ export function GalleryView({ sites, placeCode }: GalleryViewProps) {
               alt={site.site_name}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 33vw, 25vw"
             />
           </div>
 

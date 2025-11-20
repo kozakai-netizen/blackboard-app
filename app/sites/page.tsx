@@ -445,7 +445,7 @@ export default function SitesSearchPage() {
         setShowAdvancedSearch={setShowAdvancedSearch}
       />
 
-      <div className="mx-auto max-w-6xl px-3 sm:px-4 py-4 space-y-4">
+      <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 space-y-4">
 
         {/* デバッグバナー（debug=1の時のみ） */}
         {debug && (

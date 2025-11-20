@@ -89,7 +89,7 @@ export function KanbanView({ sites, placeCode }: KanbanViewProps) {
       {/* ヘッダー行 - 横スクロール */}
       <div
         ref={headerRef}
-        className="flex gap-4 overflow-x-auto overflow-y-hidden -mx-6 px-6 flex-shrink-0"
+        className="flex gap-4 overflow-x-auto overflow-y-hidden flex-shrink-0"
         style={{ scrollbarWidth: 'thin' }}
         onScroll={handleScroll('header')}
       >
@@ -108,11 +108,11 @@ export function KanbanView({ sites, placeCode }: KanbanViewProps) {
           return (
             <div
               key={`header-${lane.id}`}
-              className={`flex-shrink-0 min-w-[300px] w-[32rem] sticky top-[calc(68px)] z-10 px-3 py-2 rounded-xl border border-gray-200 ${bgColorClass}`}
+              className={`flex-shrink-0 min-w-[300px] w-[32rem] sticky top-[calc(68px)] z-10 px-4 py-3 rounded-xl border border-gray-200 ${bgColorClass}`}
             >
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-[13px] text-gray-900">{lane.label}</h3>
-                <span className={tone.chip}>
+                <h3 className="font-semibold text-sm text-gray-900">{lane.label}</h3>
+                <span className="inline-flex items-center justify-center rounded-full bg-white/80 px-2.5 py-1 text-sm font-semibold text-gray-700">
                   {laneSites.length}
                 </span>
               </div>
@@ -125,7 +125,7 @@ export function KanbanView({ sites, placeCode }: KanbanViewProps) {
       <div
         ref={cardsRef}
         data-testid="sites-kanban"
-        className="flex gap-4 overflow-x-auto overflow-y-hidden -mx-6 px-6 flex-1"
+        className="flex gap-4 overflow-x-auto overflow-y-hidden flex-1"
         style={{ scrollbarWidth: 'thin' }}
         onScroll={handleScroll('cards')}
       >
@@ -142,9 +142,10 @@ export function KanbanView({ sites, placeCode }: KanbanViewProps) {
                 <div
                   key={site.site_code}
                   onClick={() => handleCardClick(site.site_code)}
-                  className={`${tone.surface} ${tone.cardPad} cursor-pointer flex flex-col`}
+                  className={`${tone.surface} ${tone.cardPad} cursor-pointer flex flex-col justify-between`}
                 >
-                  <div className="flex-1">
+                  {/* 上部コンテンツ */}
+                  <div className="space-y-1">
                     {/* 現場名 */}
                     <h4
                       data-testid="site-name"
@@ -159,29 +160,25 @@ export function KanbanView({ sites, placeCode }: KanbanViewProps) {
                       {site.status && <SiteChip text={site.status} variant={statusVariant(site.status)} testId="site-status" />}
                     </div>
 
-                    {/* 住所 */}
-                    {site.address && (
-                      <p
-                        data-testid="site-address"
-                        className="text-sm text-gray-600 mt-2 line-clamp-1"
-                      >
-                        {site.address}
-                      </p>
-                    )}
+                    {/* 住所（空でも高さ確保） */}
+                    <p
+                      data-testid="site-address"
+                      className="text-sm text-gray-600 mt-2 line-clamp-1 min-h-[1.25rem]"
+                    >
+                      {site.address || '\u00A0'}
+                    </p>
 
-                    {/* 更新日 */}
-                    {site.updated_at && (
-                      <p
-                        data-testid="site-updated-at"
-                        className="text-sm text-gray-500 mt-1"
-                      >
-                        更新: {new Date(site.updated_at).toLocaleDateString('ja-JP')}
-                      </p>
-                    )}
+                    {/* 更新日（空でも高さ確保） */}
+                    <p
+                      data-testid="site-updated-at"
+                      className="text-sm text-gray-500 mt-1 min-h-[1.25rem]"
+                    >
+                      {site.updated_at ? `更新: ${new Date(site.updated_at).toLocaleDateString('ja-JP')}` : '\u00A0'}
+                    </p>
                   </div>
 
-                  {/* CTAボタン - 右下配置 */}
-                  <div className="mt-auto pt-3 flex gap-2 justify-end">
+                  {/* CTAボタン - 下部固定 */}
+                  <div className="mt-3 flex gap-2 justify-end">
                     <button
                       onClick={(e) => handleUpload(e, site.site_code)}
                       data-testid="btn-local"

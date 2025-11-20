@@ -499,3 +499,15 @@ useEffect(() => {
 ---
 
 **最終更新日**: 2025-11-19
+
+---
+
+## UI調整時の注意（v1.1.0）
+
+- /sites 画面のUIを調整する際は、以下のポイントを守ること
+  - バックエンドのフィルタリング仕様（元請け / 協力業者、「自分の現場のみ」、DW / STG フォールバック）は変更しない
+  - `app/api/sites/quicklist/route.ts` のロジックには手を入れず、見た目の変更は `components/sites/views/*` と `components/sites/Toolbar.tsx` で完結させる
+  - 「自分の現場のみ」トグルはフロント側の二重フィルタではなく、APIレスポンスとの整合性を優先すること
+- UI調整により現場が0件表示になる場合、まずは以下を確認する
+  - Dev Mode パラメータ（?role=prime/sub, only=0/1）が正しく付与されているか
+  - `/api/sites/quicklist` のレスポンス `items.length` と画面上の件数が一致しているか

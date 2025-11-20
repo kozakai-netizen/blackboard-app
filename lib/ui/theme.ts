@@ -34,8 +34,8 @@ export const tone = {
 } as const;
 
 export const cardSize = {
-  // ✅ 3列固定（XL以上）・グリッドで自動幅調整
-  gridCols: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-3 gap-5',
+  // ✅ レスポンシブ対応：画面幅に応じて列数を増やす
+  gridCols: 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5',
   maxW:     '', // 削除：カードをグリッド幅いっぱいに広げる
   gallery:  { aspect: 'aspect-[4/3]' }
 } as const;
